@@ -4,6 +4,9 @@
 #include <dt-bindings/zmk/outputs.h>
 #include <dt-bindings/zmk/pointing.h>
 
+#include "toucan_behaviors.dtsi"
+#include "toucan_combos.dtsi"
+
 #define BASE 0
 #define NAV  1
 #define SYM  2

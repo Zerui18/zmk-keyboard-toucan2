@@ -1,0 +1,10 @@
+.DS_Store
+.venv/
+.west/
+build/
+firmware/
+zmk/
+modules/
+tools/
+bootloader/
+

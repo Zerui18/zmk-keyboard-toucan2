@@ -1,0 +1,16 @@
+/*
+ * Custom combos/chords belong here. Example:
+ *
+ * / {
+ *     combos {
+ *         compatible = "zmk,combos";
+ *
+ *         jk_escape {
+ *             timeout-ms = <40>;
+ *             key-positions = <19 20>;
+ *             bindings = <&kp ESC>;
+ *         };
+ *     };
+ * };
+ */
+
