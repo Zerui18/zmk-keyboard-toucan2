@@ -5,6 +5,7 @@ BOOTLOADER ?= /Volumes/XIAO-BOOT
 ZMK_BUILD_IMAGE ?= zmkfirmware/zmk-build-arm:stable
 ZMK_BUILD_VOLUME ?= toucan2-zmk-v03
 ZMK_TOOL := bash scripts/zmk.sh
+PYTHON ?= python3
 
 export BOOTLOADER
 export ZMK_BUILD_IMAGE
@@ -14,7 +15,8 @@ INSTALL_REQUESTED := $(filter install,$(MAKECMDGOALS))
 INSTALL_SIDE_GOALS := $(filter left right,$(MAKECMDGOALS))
 
 .PHONY: help setup doctor left right all install install-left install-right \
-	flash-left flash-right west-update clean shell sync-upstream
+	flash-left flash-right west-update clean shell sync-upstream format-keymap \
+	check-keymap-format install-hooks
 
 help:
 	@printf '%s\n' \
@@ -27,6 +29,9 @@ help:
 		'  make install right        Build and flash the right half' \
 		'  make install-left         Alias for make install left' \
 		'  make install-right        Alias for make install right' \
+		'  make format-keymap        Reflow layers to the physical split layout' \
+		'  make check-keymap-format  Check formatting without changing files' \
+		'  make install-hooks        Enable the repository pre-commit hooks' \
 		'' \
 		'  make setup                Pull the builder and initialize West' \
 		'  make doctor               Check Docker, remotes, and bootloader' \
@@ -53,6 +58,16 @@ right:
 	@$(ZMK_TOOL) $(if $(INSTALL_REQUESTED),install,build) right
 
 all: left right
+
+format-keymap:
+	@$(PYTHON) scripts/format-keymap.py
+
+check-keymap-format:
+	@$(PYTHON) scripts/format-keymap.py --check
+
+install-hooks:
+	@git config --local core.hooksPath .githooks
+	@printf '%s\n' 'Git hooks enabled from .githooks'
 
 # Supports both `make install SIDE=left` and `make install left`.
 install:
@@ -85,4 +100,3 @@ shell:
 
 sync-upstream:
 	@bash scripts/sync-upstream.sh
-

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly REPO_ROOT="$(git rev-parse --show-toplevel)"
+readonly KEYMAP="config/toucan.keymap"
+
+# Ignore an unstaged edit during an unrelated commit. When the keymap is part
+# of this commit, validate the index blob itself so partial staging is safe.
+if git -C "$REPO_ROOT" diff --cached --quiet --diff-filter=ACMR -- "$KEYMAP"; then
+    exit 0
+fi
+
+readonly HOOK_TMP_DIR="$(mktemp -d)"
+readonly STAGED_KEYMAP="${HOOK_TMP_DIR}/toucan.keymap"
+trap 'rm -rf -- "$HOOK_TMP_DIR"' EXIT
+
+git -C "$REPO_ROOT" show ":${KEYMAP}" >"$STAGED_KEYMAP"
+
+if ! "$REPO_ROOT/scripts/format-keymap.py" --check "$STAGED_KEYMAP" >/dev/null; then
+    printf '%s\n' \
+        'error: staged config/toucan.keymap does not match the Toucan physical layout' \
+        'run: make format-keymap' \
+        'then stage config/toucan.keymap and commit again' >&2
+    exit 1
+fi
