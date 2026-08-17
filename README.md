@@ -58,6 +58,44 @@ Run `make help` for all development targets. In particular:
 - **Swipe shortcuts**: the `swipe_button_mapper` node in [boards/shields/toucan/toucan.dtsi](boards/shields/toucan/toucan.dtsi)
 - **Invert scroll / trackpad settings**: the `tps43_trackpad` node in [boards/shields/toucan/toucan_right.overlay](boards/shields/toucan/toucan_right.overlay)
 
+## Per-half soft power
+
+Each half has an independent, deliberately armed pseudo-power chord. It uses ZMK
+soft off to disconnect Bluetooth, suspend the display or trackpad and enter the
+nRF52840's very-low-power System OFF state.
+
+- Left: tap and release the `&mo 1` (NAV) thumb, press and hold it again, then
+  press `A`, `X`, `D`, and `V` while continuing to hold the thumb.
+- Right: do the same with the `&mo 2` (SYM) thumb and the mirrored `;`, `.`, `K`,
+  and `M` positions.
+
+Start with no keys held. The first thumb tap must take at most 200 ms; press the
+thumb again within 300 ms and keep holding it. This arms a 1.5-second capture
+window in which the four character keys must all be pressed within 120 ms. Their
+presses and releases are swallowed, so nothing is typed. Any other key, early
+release or timeout cancels the attempt. Once recognized, release everything to
+enter System OFF.
+
+The listener only observes the layer thumb and never delays it: an ordinary tap
+or hold still activates and releases NAV or SYM exactly as before. Only the
+deliberate tap-release-hold sequence starts capturing the shutdown keys. It
+powers off only the half on which it was physically entered, so repeat it on the
+other half to power off both.
+
+To wake a half, hold its four character keys, then press and hold its layer thumb
+and keep all five down until the half starts. While the MCU is off, only the
+final thumb switch is electrically capable of waking it; after reset, firmware
+scans only the key matrix for up to 250 ms and immediately returns to System OFF
+after the thumb is released unless exactly the other four keys are also held.
+Normal Bluetooth, split, display, and trackpad startup happens only after this
+check passes. A reset button press remains an escape hatch, including for
+entering the UF2 bootloader.
+
+The timing values are configurable in [Kconfig](Kconfig). The implementation is
+in [src/toucan_soft_power.c](src/toucan_soft_power.c), rather than a normal ZMK
+combo, so it runs locally and still works on the right peripheral when the left
+central is off.
+
 ## Staying current with Beekeeb
 
 This checkout uses `origin` for the personal fork and `upstream` for Beekeeb's

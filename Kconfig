@@ -1,0 +1,78 @@
+config TOUCAN_SOFT_POWER
+    bool "Toucan per-half soft power chord"
+    default y if SHIELD_TOUCAN_LEFT || SHIELD_TOUCAN_RIGHT
+    depends on SOC_NRF52840
+    select ZMK_PM_SOFT_OFF
+    help
+      Recognize a deliberate layer-thumb tap-release-hold followed by a
+      four-key chord, and put only that half into nRF System OFF. A retained
+      marker and matrix-key wake source require the five physical keys to wake.
+
+if TOUCAN_SOFT_POWER
+
+config TOUCAN_SOFT_POWER_ARM_TAP_MAX_MS
+    int "Maximum duration of the arming tap"
+    range 50 500
+    default 200
+    help
+      The layer thumb's first press must be released within this interval. The
+      tap is observed without delaying its normal momentary-layer behavior.
+
+config TOUCAN_SOFT_POWER_ARM_WINDOW_MS
+    int "Maximum delay before the arming hold"
+    range 50 1000
+    default 300
+    help
+      After the isolated tap, the same layer thumb must be pressed again within
+      this interval and remain held while entering the shutdown chord.
+
+config TOUCAN_SOFT_POWER_CAPTURE_TIMEOUT_MS
+    int "Shutdown chord capture interval"
+    range 250 5000
+    default 1500
+    help
+      Time after the second layer-thumb press during which the four shutdown
+      keys may be entered. After this expires, all keys behave normally again.
+
+config TOUCAN_SOFT_POWER_CHORD_TIMEOUT_MS
+    int "Maximum interval for the power-off chord"
+    range 50 500
+    default 120
+    help
+      Once capture is armed, all four character keys must be pressed within
+      this interval. Any other key invalidates the attempt.
+
+config TOUCAN_SOFT_POWER_WAKE_VALIDATION_MS
+    int "Wake chord validation interval"
+    range 50 1000
+    default 250
+    help
+      Maximum time during early boot to wait for the complete wake chord. Only
+      the GPIO matrix is active during this interval; Bluetooth and the normal
+      ZMK application have not started yet.
+
+config TOUCAN_SOFT_POWER_WAKE_STABLE_MS
+    int "Required stable wake chord time"
+    range 5 100
+    default 20
+    help
+      Time for which the exact wake chord must scan continuously, allowing
+      switch bounce to settle before the firmware accepts the wake.
+
+config TOUCAN_SOFT_POWER_OFF_DELAY_MS
+    int "Released-key settling time before soft off"
+    range 0 100
+    default 25
+    help
+      Time after all keys are released before suspending the half. This keeps
+      the thumb wake GPIO inactive while entering System OFF.
+
+config TOUCAN_SOFT_POWER_INIT_PRIORITY
+    int
+    default 41
+    help
+      POST_KERNEL initialization priority immediately after Zephyr's system
+      work queue (40), so wake validation completes before the display,
+      trackpad, radios, and ZMK services start.
+
+endif

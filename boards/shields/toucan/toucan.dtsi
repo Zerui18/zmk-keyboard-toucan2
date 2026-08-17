@@ -8,6 +8,32 @@
 //#define TOUCAN_WIN_MODE
 
 / {
+    /*
+     * System OFF cannot scan a matrix chord. Keep only the mirrored layer
+     * thumb's matrix intersection powered as the hardware wake source; the
+     * firmware validates the complete five-key pattern immediately after boot.
+     * Both mirrored thumb switches happen to use row P0.29 and column P1.11.
+     */
+    soft_power_keys {
+        compatible = "gpio-keys";
+
+        toucan_soft_power_key: toucan_soft_power_key {
+            gpios = <&gpio0 29 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>;
+        };
+    };
+
+    toucan_soft_power_wakeup: toucan_soft_power_wakeup {
+        compatible = "zmk,gpio-key-wakeup-trigger";
+        trigger = <&toucan_soft_power_key>;
+        extra-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
+        wakeup-source;
+    };
+
+    soft_off_wakers {
+        compatible = "zmk,soft-off-wakeup-sources";
+        wakeup-sources = <&toucan_soft_power_wakeup>;
+    };
+
     chosen {
         zmk,kscan = &kscan0;
         zmk,physical-layout = &default_layout;
