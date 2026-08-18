@@ -96,7 +96,14 @@ flash_side() {
 
     destination="${BOOTLOADER_PATH}/$(basename "$artifact")"
     log "Flashing Toucan2 ${side}: ${artifact} -> ${destination}"
-    cp "$artifact" "$destination"
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        # The UF2 bootloader reboots and unmounts as soon as it accepts the
+        # payload. Prevent macOS cp from subsequently touching extended
+        # attributes on a volume that is no longer present.
+        COPYFILE_DISABLE=1 cp -X "$artifact" "$destination"
+    else
+        cp "$artifact" "$destination"
+    fi
     log "Copy complete; the XIAO bootloader may now unmount and reboot"
 }
 
@@ -182,4 +189,3 @@ main() {
 }
 
 main "$@"
-
