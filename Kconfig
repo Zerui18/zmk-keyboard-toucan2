@@ -76,3 +76,44 @@ config TOUCAN_SOFT_POWER_INIT_PRIORITY
       trackpad, radios, and ZMK services start.
 
 endif
+
+DT_COMPAT_TOUCAN_BATTERY_ESTIMATOR := zmk,toucan-battery-estimator
+DT_COMPAT_TOUCAN_BATTERY_READOUT := zmk,behavior-toucan-battery-readout
+
+config TOUCAN_BATTERY_ESTIMATOR
+    bool "Toucan filtered LiPo battery estimator"
+    default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_BATTERY_ESTIMATOR))
+    depends on SETTINGS
+    select SENSOR
+    help
+      Wrap the XIAO's stock voltage-divider sensor with burst sampling, a
+      nonlinear LiPo discharge curve, temporal filtering, and a small amount
+      of persisted state so resets do not cause large percentage jumps.
+
+if TOUCAN_BATTERY_ESTIMATOR
+
+config TOUCAN_BATTERY_VOLTAGE_OFFSET_MV
+    int "Per-half battery voltage calibration offset in millivolts"
+    range -250 250
+    default 0
+    help
+      Added to the voltage reported by the XIAO divider before estimating the
+      charge percentage. Set this separately in toucan_left.conf and
+      toucan_right.conf after comparing the reported voltage with a multimeter.
+
+config TOUCAN_BATTERY_ESTIMATOR_INIT_PRIORITY
+    int
+    default 91
+    help
+      Initialize immediately after ZMK's stock voltage-divider sensor.
+
+config TOUCAN_BATTERY_READOUT
+    bool "Toucan on-demand raw battery voltage readout"
+    default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_BATTERY_READOUT))
+    depends on ZMK_SPLIT && ZMK_INPUT_SPLIT
+    help
+      Provide the global &battery behavior. Pressing it publishes each half's
+      latest raw median ADC reading, relays the right reading to the central,
+      and types both voltages through the selected HID endpoint.
+
+endif

@@ -95,7 +95,8 @@ static void battery_status_update_cb(struct battery_status_state state) {
 }
 
 static struct battery_status_state battery_status_get_state(const zmk_event_t *eh) {
-    const struct zmk_battery_state_changed *ev = as_zmk_battery_state_changed(eh);
+    const struct zmk_battery_state_changed *ev =
+        eh != NULL ? as_zmk_battery_state_changed(eh) : NULL;
 
     return (struct battery_status_state){
         .level = (ev != NULL) ? ev->state_of_charge : zmk_battery_state_of_charge(),
@@ -115,32 +116,43 @@ ZMK_SUBSCRIPTION(widget_battery_status, zmk_usb_conn_state_changed);
 
 // R
 static void set_battery_peripheral_status(struct zmk_widget_screen *widget,
-                               struct battery_peripheral_status_state state) {
+                                          struct battery_peripheral_status_state state) {
 #if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
     widget->state.charging_p = state.usb_present;
 #endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
-
-    uint8_t level;
-    zmk_split_central_get_peripheral_battery_level(0, &level);
-
-    widget->state.battery_p = level;
+    widget->state.battery_p = state.level;
     draw_top(widget->obj, widget->cbuf, &widget->state);
 }
 
 static void battery_peripheral_status_update_cb(struct battery_peripheral_status_state state) {
     struct zmk_widget_screen *widget;
 
-    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { set_battery_peripheral_status(widget, state); }
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        set_battery_peripheral_status(widget, state);
+    }
 }
 
-static struct battery_peripheral_status_state battery_peripheral_status_get_state(const zmk_event_t *eh) {
-    const struct zmk_peripheral_battery_state_changed *ev = as_zmk_peripheral_battery_state_changed(eh);
+static struct battery_peripheral_status_state
+battery_peripheral_status_get_state(const zmk_event_t *eh) {
+    uint8_t level = 0U;
 
+    if (eh != NULL) {
+        const struct zmk_peripheral_battery_state_changed *ev =
+            as_zmk_peripheral_battery_state_changed(eh);
+        if (ev != NULL && ev->source == 0U) {
+            level = ev->state_of_charge;
+        } else {
+            (void)zmk_split_central_get_peripheral_battery_level(0, &level);
+        }
+    } else {
+        (void)zmk_split_central_get_peripheral_battery_level(0, &level);
+    }
 
     return (struct battery_peripheral_status_state){
-        .level = ev->state_of_charge,
+        .level = level,
 #if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
-        .usb_present = zmk_usb_is_powered(),
+        /* The central's USB state says nothing about the peripheral charger. */
+        .usb_present = false,
 #endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
     };
 }
@@ -309,4 +321,3 @@ int zmk_widget_screen_init(struct zmk_widget_screen *widget, lv_obj_t *parent) {
 }
 
 lv_obj_t *zmk_widget_screen_obj(struct zmk_widget_screen *widget) { return widget->obj; }
-

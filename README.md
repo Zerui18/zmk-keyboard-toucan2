@@ -58,6 +58,52 @@ Run `make help` for all development targets. In particular:
 - **Swipe shortcuts**: the `swipe_button_mapper` node in [boards/shields/toucan/toucan.dtsi](boards/shields/toucan/toucan.dtsi)
 - **Invert scroll / trackpad settings**: the `tps43_trackpad` node in [boards/shields/toucan/toucan_right.overlay](boards/shields/toucan/toucan_right.overlay)
 
+## Battery estimation
+
+Both halves keep the XIAO's stock voltage-divider driver for the hardware ADC
+reading, then pass its voltage through the Toucan estimator in
+[`src/toucan_battery_estimator.c`](src/toucan_battery_estimator.c). The estimator
+takes the median of five readings, uses a nonlinear single-cell LiPo discharge
+curve, smooths readings over time, limits the displayed change to two percentage
+points per report, and saves its filtered state. The saved state prevents a
+restart from replacing a settled estimate with one noisy startup sample.
+
+The first boot after installing this firmware has no saved history yet. Later
+restarts restore the previous estimate when it is consistent with the newly
+measured voltage. The normal ZMK report interval is 60 seconds, so changes are
+intentionally gradual.
+
+The `320 mAh` rating affects runtime, not the voltage-to-percentage curve. If a
+half has a repeatable ADC bias, add its calibration in
+[`config/toucan_left.conf`](config/toucan_left.conf) or
+[`config/toucan_right.conf`](config/toucan_right.conf):
+
+```ini
+CONFIG_TOUCAN_BATTERY_VOLTAGE_OFFSET_MV=-25
+```
+
+The value is signed millivolts: use actual battery voltage minus reported raw
+voltage. For example, 3.95 V at the battery and 3.98 V from the ADC means
+`-30`. Each half can have a different offset. Calibration corrects a consistent
+measurement bias; it cannot turn voltage-only estimation into a true
+coulomb-counting fuel gauge.
+
+### On-demand voltage readout
+
+Reach `ADJ` by holding the `NAV` and `SYM` layer keys together, then press the
+key bound to `&battery`. It types each half's latest recorded five-sample median
+through the currently selected USB or Bluetooth connection. These are the raw,
+uncalibrated readings:
+
+```text
+left=4124mv
+right=3721mv
+```
+
+The behavior is global, so the one key press asks each half for its own recorded
+voltage. The right relays its result to the left central, which types both lines.
+If the right is disconnected, only the left line is available.
+
 ## Per-half soft power
 
 Each half has an independent, deliberately armed pseudo-power chord. It uses ZMK

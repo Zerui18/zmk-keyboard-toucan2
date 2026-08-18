@@ -59,7 +59,7 @@
             bindings = <
                 &mo TAB   &bootloader &kp F7 &kp F8   &kp F9  &kp F12      &kp C_VOL_DN &kp C_MUTE &kp C_VOL_UP &trans &bootloader &kp BSPC
                 &kp LCTRL &trans      &kp F4 &kp F5   &kp F6  &kp F11      &trans       &trans     &trans       &trans &trans      &trans
-                &bt LSHFT &trans      &kp F1 &kp F2   &kp F3  &kp F10      &trans       &trans     &trans       &trans &trans      &trans
+                &kp LSHFT &battery    &kp F1 &kp F2   &kp F3  &kp F10      &trans       &trans     &trans       &trans &trans      &trans
                                              &kp LGUI &mo NAV &kp SPACE    &kp RET      &mo 2      &kp RALT
             >;
         };

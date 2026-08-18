@@ -1,8 +1,12 @@
-/*
- * Custom reusable behavior nodes belong here, for example hold-taps,
- * tap-dances, macros, sticky keys, or mod-morph behaviors.
- *
- * This file is included by toucan.keymap. Add normal devicetree nodes under
- * a `/ { behaviors { ... }; };` block when you are ready to define them.
- */
+/* Custom reusable behaviors shared by both halves. */
 
+/ {
+    behaviors {
+        /* Short node name is required because this behavior runs on peripherals. */
+        battery: batread {
+            compatible = "zmk,behavior-toucan-battery-readout";
+            #binding-cells = <0>;
+            display-name = "Battery Readout";
+        };
+    };
+};

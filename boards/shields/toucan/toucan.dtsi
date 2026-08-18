@@ -35,9 +35,15 @@
     };
 
     chosen {
+        zmk,battery = &toucan_battery;
         zmk,kscan = &kscan0;
         zmk,physical-layout = &default_layout;
         //zmk,physical-layout = &physical_layout0;
+    };
+
+    toucan_battery: toucan_battery {
+        compatible = "zmk,toucan-battery-estimator";
+        source = <&vbatt>;
     };
 
     kscan0: kscan_0 {

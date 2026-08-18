@@ -1,0 +1,14 @@
+# Copyright (c) 2026 Zerui Chen
+# SPDX-License-Identifier: MIT
+
+description: Filtered state-of-charge estimator wrapping another battery sensor
+
+compatible: "zmk,toucan-battery-estimator"
+
+include: sensor-device.yaml
+
+properties:
+  source:
+    type: phandle
+    required: true
+    description: Battery sensor providing SENSOR_CHAN_GAUGE_VOLTAGE
