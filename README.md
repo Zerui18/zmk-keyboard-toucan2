@@ -85,8 +85,8 @@ other half to power off both.
 To wake a half, hold its four character keys, then press and hold its layer thumb
 and keep all five down until the half starts. While the MCU is off, only the
 final thumb switch is electrically capable of waking it; after reset, firmware
-scans only the key matrix for up to 250 ms and immediately returns to System OFF
-after the thumb is released unless exactly the other four keys are also held.
+scans only the key matrix for up to one second. It returns to System OFF after
+the entire matrix is released unless exactly the other four keys are also held.
 Normal Bluetooth, split, display, and trackpad startup happens only after this
 check passes. A reset button press remains an escape hatch, including for
 entering the UF2 bootloader.

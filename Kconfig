@@ -44,8 +44,8 @@ config TOUCAN_SOFT_POWER_CHORD_TIMEOUT_MS
 
 config TOUCAN_SOFT_POWER_WAKE_VALIDATION_MS
     int "Wake chord validation interval"
-    range 50 1000
-    default 250
+    range 50 3000
+    default 1000
     help
       Maximum time during early boot to wait for the complete wake chord. Only
       the GPIO matrix is active during this interval; Bluetooth and the normal

@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include <hal/nrf_gpio.h>
 #include <hal/nrf_power.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -15,7 +16,9 @@
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/pm/device.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/sys/poweroff.h>
 
 #include <zmk/event_manager.h>
 #include <zmk/events/position_state_changed.h>
@@ -28,17 +31,19 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 extern int tps43_set_sleep(const struct device *dev, bool sleep);
 #endif
 
-/*
- * GPREGRET[0] is used by the XIAO/Adafruit bootloader and Zephyr reboot code.
- * GPREGRET[1] is deliberately used for our private soft-power marker instead.
- */
+/* GPREGRET[0] belongs to the XIAO bootloader; keep our marker in GPREGRET[1]. */
 #define TOUCAN_SOFT_POWER_MARKER 0xA7U
 #define TOUCAN_SOFT_POWER_GPRET_INDEX 1U
+#define TOUCAN_SOFT_POWER_WAKE_GPIO_PIN NRF_GPIO_PIN_MAP(0, 29)
 
 #define POSITION_BIT(position) BIT64(position)
 #define MATRIX_BIT(row, column) BIT(((row) * 6) + (column))
 
 #define KSCAN_NODE DT_CHOSEN(zmk_kscan)
+#define SOFT_POWER_WAKEUP_NODE DT_NODELABEL(toucan_soft_power_wakeup)
+
+static const struct device *const soft_power_wakeup =
+    DEVICE_DT_GET(SOFT_POWER_WAKEUP_NODE);
 
 static const struct gpio_dt_spec matrix_rows[] = {
     GPIO_DT_SPEC_GET_BY_IDX(KSCAN_NODE, row_gpios, 0),
@@ -65,7 +70,6 @@ static const struct gpio_dt_spec matrix_columns[] = {
 #define TOUCAN_POWER_MATRIX_MASK                                                               \
     (MATRIX_BIT(1, 1) | MATRIX_BIT(2, 2) | MATRIX_BIT(1, 3) | MATRIX_BIT(2, 4) |               \
      MATRIX_BIT(3, 4))
-#define TOUCAN_POWER_WAKE_MATRIX_BIT MATRIX_BIT(3, 4)
 #elif IS_ENABLED(CONFIG_SHIELD_TOUCAN_RIGHT)
 #define TOUCAN_POWER_FINAL_POSITION 40U /* &mo 2, the mirrored thumb */
 #define TOUCAN_POWER_TARGET_MASK                                                               \
@@ -74,7 +78,6 @@ static const struct gpio_dt_spec matrix_columns[] = {
 #define TOUCAN_POWER_MATRIX_MASK                                                               \
     (MATRIX_BIT(1, 4) | MATRIX_BIT(2, 3) | MATRIX_BIT(1, 2) | MATRIX_BIT(2, 1) |               \
      MATRIX_BIT(3, 1))
-#define TOUCAN_POWER_WAKE_MATRIX_BIT MATRIX_BIT(3, 1)
 #else
 #error "Toucan soft power requires a Toucan left or right shield"
 #endif
@@ -113,6 +116,11 @@ K_WORK_DELAYABLE_DEFINE(clear_wake_suppression_work, clear_wake_suppression_work
 
 static void clear_soft_power_marker(void) {
     nrf_power_gpregret_set(NRF_POWER, TOUCAN_SOFT_POWER_GPRET_INDEX, 0U);
+}
+
+static void clear_wake_gpio_latch(void) {
+    /* GPIO LATCH is retained across System OFF wakes on nRF52840. */
+    nrf_gpio_pin_latch_clear(TOUCAN_SOFT_POWER_WAKE_GPIO_PIN);
 }
 
 static void prepare_soft_power_marker(void) {
@@ -172,6 +180,7 @@ static void restore_local_peripheral(bool suspended) {
 
 static void enter_soft_off(void) {
     bool peripheral_suspended = suspend_local_peripheral();
+    clear_wake_gpio_latch();
     prepare_soft_power_marker();
 
     LOG_INF("Entering Toucan soft power off");
@@ -182,6 +191,48 @@ static void enter_soft_off(void) {
     power_off_pending = false;
     restore_local_peripheral(peripheral_suspended);
     LOG_ERR("Unable to enter Toucan soft power off (%d)", err);
+}
+
+static int reenter_soft_off_after_rejected_wake(void) {
+    if (!device_is_ready(soft_power_wakeup)) {
+        return -ENODEV;
+    }
+
+    bool peripheral_suspended = suspend_local_peripheral();
+
+    /*
+     * This runs before the normal ZMK application and kscan initialization.
+     * Do not call zmk_pm_soft_off() here: it walks and suspends every device,
+     * including devices whose init functions have not run yet. Instead, reset
+     * and resume only ZMK's dedicated wake-source device, just as the normal
+     * inactivity sleep path leaves its wake-capable kscan ready before calling
+     * sys_poweroff().
+     */
+    int err = pm_device_action_run(soft_power_wakeup, PM_DEVICE_ACTION_SUSPEND);
+    if (err < 0 && err != -EALREADY) {
+        restore_local_peripheral(peripheral_suspended);
+        return err;
+    }
+
+    if (!pm_device_wakeup_enable(soft_power_wakeup, true)) {
+        restore_local_peripheral(peripheral_suspended);
+        return -ENOTSUP;
+    }
+
+    err = pm_device_action_run(soft_power_wakeup, PM_DEVICE_ACTION_RESUME);
+    if (err < 0) {
+        restore_local_peripheral(peripheral_suspended);
+        return err;
+    }
+
+    /* All keys are released, so clear the old event after SENSE is rearmed. */
+    clear_wake_gpio_latch();
+    prepare_soft_power_marker();
+
+    LOG_INF("Returning rejected Toucan wake to soft off");
+    sys_poweroff();
+
+    CODE_UNREACHABLE;
 }
 
 static void power_off_work_handler(struct k_work *work) {
@@ -307,7 +358,7 @@ static int validate_wake_chord(void) {
     return accepted ? 1 : 0;
 }
 
-static int wait_for_wake_key_release(void) {
+static int wait_for_all_keys_released(void) {
     int err = prepare_matrix_for_validation();
     if (err < 0) {
         disconnect_matrix();
@@ -325,7 +376,7 @@ static int wait_for_wake_key_release(void) {
         }
 
         int64_t now = k_uptime_get();
-        if ((matrix_state & TOUCAN_POWER_WAKE_MATRIX_BIT) == 0U) {
+        if (matrix_state == 0U) {
             if (released_since < 0) {
                 released_since = now;
             } else if (now - released_since >= CONFIG_TOUCAN_SOFT_POWER_OFF_DELAY_MS) {
@@ -592,15 +643,16 @@ static int toucan_soft_power_init(void) {
 
     LOG_INF("Incomplete Toucan wake chord; returning to soft off");
 
-    int err = wait_for_wake_key_release();
+    int err = wait_for_all_keys_released();
     if (err < 0) {
         clear_soft_power_marker();
-        LOG_ERR("Unable to wait for wake key release (%d); booting normally", err);
+        LOG_ERR("Unable to wait for all keys to release (%d); booting normally", err);
         return 0;
     }
 
-    power_off_pending = true;
-    enter_soft_off();
+    err = reenter_soft_off_after_rejected_wake();
+    clear_soft_power_marker();
+    LOG_ERR("Unable to rearm rejected Toucan wake (%d); booting normally", err);
 
     return 0;
 }
