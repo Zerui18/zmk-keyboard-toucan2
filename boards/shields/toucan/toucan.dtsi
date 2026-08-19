@@ -129,6 +129,11 @@
 
 / {
     input_processors {
+        toucan_split_xy_packer: toucan_split_xy_packer {
+            compatible = "zmk,input-processor-toucan-split-xy-packer";
+            #input-processor-cells = <0>;
+        };
+
         zip_zoom_mapper: zip_zoom_mapper {
             compatible = "zmk,input-processor-zoom";
             #input-processor-cells = <0>;

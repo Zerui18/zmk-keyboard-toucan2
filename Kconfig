@@ -79,6 +79,17 @@ endif
 
 DT_COMPAT_TOUCAN_BATTERY_ESTIMATOR := zmk,toucan-battery-estimator
 DT_COMPAT_TOUCAN_BATTERY_READOUT := zmk,behavior-toucan-battery-readout
+DT_COMPAT_TOUCAN_SPLIT_XY_PACKER := zmk,input-processor-toucan-split-xy-packer
+
+config TOUCAN_SPLIT_XY_PACKING
+    bool "Pack Toucan split trackpad X/Y reports"
+    default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_SPLIT_XY_PACKER))
+    depends on ZMK_INPUT_SPLIT
+    help
+      Pack each adjacent relative X/Y pair into one peripheral-to-central
+      input event, then reconstruct the pair on the central. ZMK v0.3 sends
+      each input event in its own BLE notification; packing prevents normal
+      trackpad motion from exhausting the peripheral's small TX buffer pool.
 
 config TOUCAN_BATTERY_ESTIMATOR
     bool "Toucan filtered LiPo battery estimator"

@@ -10,3 +10,7 @@ target_sources_ifdef(CONFIG_TOUCAN_BATTERY_READOUT app PRIVATE
   src/behavior_toucan_battery_readout.c
   src/toucan_battery_readout.c
 )
+
+target_sources_ifdef(CONFIG_TOUCAN_SPLIT_XY_PACKING app PRIVATE
+  src/toucan_split_xy_packing.c
+)

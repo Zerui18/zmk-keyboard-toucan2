@@ -82,4 +82,5 @@
 
 &trackpad_split {
     device = <&tps43_trackpad>;
+    input-processors = <&toucan_split_xy_packer>;
 };

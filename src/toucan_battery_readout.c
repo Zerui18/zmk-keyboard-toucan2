@@ -215,8 +215,15 @@ static int publish_on_demand_voltage(uint16_t raw_millivolts) {
 
 #include <zmk/split/peripheral.h>
 #include <zmk/split/transport/types.h>
+#include <zmk/workqueue.h>
 
-static int publish_on_demand_voltage(uint16_t raw_millivolts) {
+static atomic_t pending_readout_millivolts;
+
+static void battery_readout_relay_work_handler(struct k_work *work) {
+    ARG_UNUSED(work);
+
+    uint16_t raw_millivolts = (uint16_t)atomic_get(&pending_readout_millivolts);
+
     struct zmk_split_transport_peripheral_event event = {
         .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT,
         .data = {.input_event = {
@@ -225,10 +232,23 @@ static int publish_on_demand_voltage(uint16_t raw_millivolts) {
                      .type = INPUT_EV_MSC,
                      .code = INPUT_MSC_SCAN,
                      .value = READOUT_EVENT_MAGIC | raw_millivolts,
-                 }},
+        }},
     };
 
-    return zmk_split_peripheral_report_event(&event);
+    int err = zmk_split_peripheral_report_event(&event);
+    if (err < 0) {
+        LOG_WRN("Unable to relay Toucan battery readout (%d)", err);
+    }
+}
+
+K_WORK_DEFINE(battery_readout_relay_work, battery_readout_relay_work_handler);
+
+static int publish_on_demand_voltage(uint16_t raw_millivolts) {
+    atomic_set(&pending_readout_millivolts, raw_millivolts);
+
+    int err = k_work_submit_to_queue(zmk_workqueue_lowprio_work_q(),
+                                     &battery_readout_relay_work);
+    return err < 0 ? err : 0;
 }
 
 #endif
