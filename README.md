@@ -49,6 +49,7 @@ Run `make help` for all development targets. In particular:
 # Customizations
 
 - **Keymap and layers**: [config/toucan.keymap](config/toucan.keymap)
+- **Implemented Moonlander-derived layout and controls**: [docs/toucan-moonlander-layout.md](docs/toucan-moonlander-layout.md)
 - **Combos/chording**: [config/toucan_combos.dtsi](config/toucan_combos.dtsi)
 - **Custom behaviors**: [config/toucan_behaviors.dtsi](config/toucan_behaviors.dtsi)
 - **Shared firmware options**: [config/toucan.conf](config/toucan.conf)
@@ -90,10 +91,10 @@ coulomb-counting fuel gauge.
 
 ### On-demand voltage readout
 
-Reach `ADJ` by holding the `NAV` and `SYM` layer keys together, then press the
-key bound to `&battery`. It types each half's latest recorded five-sample median
-through the currently selected USB or Bluetooth connection. These are the raw,
-uncalibrated readings:
+Hold the outer-right `SYS` thumb and press the physical `Z` key bound to
+`&battery`. It types each half's latest recorded five-sample median through the
+currently selected USB or Bluetooth connection. These are the raw, uncalibrated
+readings:
 
 ```text
 left=4124mv
@@ -110,10 +111,10 @@ Each half has an independent, deliberately armed pseudo-power chord. It uses ZMK
 soft off to disconnect Bluetooth, suspend the display or trackpad and enter the
 nRF52840's very-low-power System OFF state.
 
-- Left: tap and release the `&mo 1` (NAV) thumb, press and hold it again, then
+- Left: tap and release the outer-left `BT` thumb, press and hold it again, then
   press `A`, `X`, `D`, and `V` while continuing to hold the thumb.
-- Right: do the same with the `&mo 2` (SYM) thumb and the mirrored `;`, `.`, `K`,
-  and `M` positions.
+- Right: do the same with the outer-right `SYS` thumb and the mirrored `;`, `.`,
+  `K`, and `M` positions.
 
 Start with no keys held. The first thumb tap must take at most 200 ms; press the
 thumb again within 300 ms and keep holding it. This arms a 1.5-second capture
@@ -122,20 +123,20 @@ presses and releases are swallowed, so nothing is typed. Any other key, early
 release or timeout cancels the attempt. Once recognized, release everything to
 enter System OFF.
 
-The listener only observes the layer thumb and never delays it: an ordinary tap
-or hold still activates and releases NAV or SYM exactly as before. Only the
+The listener only observes the outer layer thumb and never delays it: an
+ordinary hold still activates and releases BT or SYS normally. Only the
 deliberate tap-release-hold sequence starts capturing the shutdown keys. It
-powers off only the half on which it was physically entered, so repeat it on the
-other half to power off both.
+powers off only the half on which it was physically entered, so repeat it on
+the other half to power off both.
 
-To wake a half, hold its four character keys, then press and hold its layer thumb
-and keep all five down until the half starts. While the MCU is off, only the
-final thumb switch is electrically capable of waking it; after reset, firmware
-scans only the key matrix for up to one second. It returns to System OFF after
-the entire matrix is released unless exactly the other four keys are also held.
-Normal Bluetooth, split, display, and trackpad startup happens only after this
-check passes. A reset button press remains an escape hatch, including for
-entering the UF2 bootloader.
+To wake a half, hold its four character keys, then press and hold its outer
+layer thumb and keep all five down until the half starts. While the MCU is off,
+only the final thumb switch is electrically capable of waking it; after reset,
+firmware scans only the key matrix for up to one second. It returns to System
+OFF after the entire matrix is released unless exactly the other four keys are
+also held. Normal Bluetooth, split, display, and trackpad startup happens only
+after this check passes. A reset button press remains an escape hatch,
+including for entering the UF2 bootloader.
 
 The timing values are configurable in [Kconfig](Kconfig). The implementation is
 in [src/toucan_soft_power.c](src/toucan_soft_power.c), rather than a normal ZMK

@@ -1,16 +1,88 @@
-/*
- * Custom combos/chords belong here. Example:
- *
- * / {
- *     combos {
- *         compatible = "zmk,combos";
- *
- *         jk_escape {
- *             timeout-ms = <40>;
- *             key-positions = <19 20>;
- *             bindings = <&kp ESC>;
- *         };
- *     };
- * };
- */
+/* Moonlander text combos, scoped by layer because ZMK combos are positional. */
 
+#include <toucan_layers.dtsi>
+
+/ {
+    macros {
+        text_left_arrow: arrleft {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <30>;
+            tap-ms = <30>;
+            bindings = <&kp LT &kp MINUS>;
+        };
+
+        text_right_arrow: arrright {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <30>;
+            tap-ms = <30>;
+            bindings = <&kp MINUS &kp GT>;
+        };
+
+        text_fat_left_arrow: fatleft {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <30>;
+            tap-ms = <30>;
+            bindings = <&kp LT &kp EQUAL>;
+        };
+
+        text_fat_right_arrow: fatright {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            wait-ms = <30>;
+            tap-ms = <30>;
+            bindings = <&kp EQUAL &kp GT>;
+        };
+    };
+
+    combos {
+        compatible = "zmk,combos";
+
+        /* J+K and K+L on normal letter-producing layers. */
+        combo_left_arrow {
+            timeout-ms = <50>;
+            key-positions = <19 20>;
+            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT>;
+            bindings = <&text_left_arrow>;
+        };
+
+        combo_right_arrow {
+            timeout-ms = <50>;
+            key-positions = <20 21>;
+            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT>;
+            bindings = <&text_right_arrow>;
+        };
+
+        /* M+comma and comma+dot. */
+        combo_fat_left_arrow {
+            timeout-ms = <50>;
+            key-positions = <31 32>;
+            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT>;
+            bindings = <&text_fat_left_arrow>;
+        };
+
+        combo_fat_right_arrow {
+            timeout-ms = <50>;
+            key-positions = <32 33>;
+            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT>;
+            bindings = <&text_fat_right_arrow>;
+        };
+
+        /* The same physical J/K/L positions are 4/5/6 on SYM. */
+        combo_symbol_dot {
+            timeout-ms = <50>;
+            key-positions = <19 20>;
+            layers = <TOUCAN_SYM>;
+            bindings = <&kp DOT>;
+        };
+
+        combo_symbol_comma {
+            timeout-ms = <50>;
+            key-positions = <20 21>;
+            layers = <TOUCAN_SYM>;
+            bindings = <&kp COMMA>;
+        };
+    };
+};

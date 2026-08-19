@@ -79,7 +79,17 @@ endif
 
 DT_COMPAT_TOUCAN_BATTERY_ESTIMATOR := zmk,toucan-battery-estimator
 DT_COMPAT_TOUCAN_BATTERY_READOUT := zmk,behavior-toucan-battery-readout
+DT_COMPAT_TOUCAN_PLATFORM_TOGGLE := zmk,behavior-toucan-platform-toggle
 DT_COMPAT_TOUCAN_SPLIT_XY_PACKER := zmk,input-processor-toucan-split-xy-packer
+
+config TOUCAN_PLATFORM_MODE
+    bool "Toucan persistent macOS/Windows shortcut mode"
+    default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_PLATFORM_TOGGLE))
+    depends on SETTINGS
+    help
+      Provide the &cmd_key and &platform_mode behaviors. Command bindings send
+      GUI in macOS mode and Control in Windows mode, while dedicated Control
+      bindings remain unchanged. The selected mode persists across resets.
 
 config TOUCAN_SPLIT_XY_PACKING
     bool "Pack Toucan split trackpad X/Y reports"

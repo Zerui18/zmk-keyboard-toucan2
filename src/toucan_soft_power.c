@@ -63,21 +63,21 @@ static const struct gpio_dt_spec matrix_columns[] = {
 
 /* Physical positions in the stock 42-key layout. */
 #if IS_ENABLED(CONFIG_SHIELD_TOUCAN_LEFT)
-#define TOUCAN_POWER_FINAL_POSITION 37U /* &mo 1 */
+#define TOUCAN_POWER_FINAL_POSITION 36U /* outer BT layer thumb */
 #define TOUCAN_POWER_TARGET_MASK                                                               \
     (POSITION_BIT(13) | POSITION_BIT(26) | POSITION_BIT(15) | POSITION_BIT(28) |              \
-     POSITION_BIT(TOUCAN_POWER_FINAL_POSITION)) /* A X D V + NAV thumb */
+     POSITION_BIT(TOUCAN_POWER_FINAL_POSITION)) /* A X D V + outer thumb */
 #define TOUCAN_POWER_MATRIX_MASK                                                               \
     (MATRIX_BIT(1, 1) | MATRIX_BIT(2, 2) | MATRIX_BIT(1, 3) | MATRIX_BIT(2, 4) |               \
-     MATRIX_BIT(3, 4))
+     MATRIX_BIT(3, 3))
 #elif IS_ENABLED(CONFIG_SHIELD_TOUCAN_RIGHT)
-#define TOUCAN_POWER_FINAL_POSITION 40U /* &mo 2, the mirrored thumb */
+#define TOUCAN_POWER_FINAL_POSITION 41U /* outer SYS layer thumb */
 #define TOUCAN_POWER_TARGET_MASK                                                               \
     (POSITION_BIT(22) | POSITION_BIT(33) | POSITION_BIT(20) | POSITION_BIT(31) |              \
-     POSITION_BIT(TOUCAN_POWER_FINAL_POSITION)) /* ; . K M + SYM thumb */
+     POSITION_BIT(TOUCAN_POWER_FINAL_POSITION)) /* ; . K M + outer thumb */
 #define TOUCAN_POWER_MATRIX_MASK                                                               \
     (MATRIX_BIT(1, 4) | MATRIX_BIT(2, 3) | MATRIX_BIT(1, 2) | MATRIX_BIT(2, 1) |               \
-     MATRIX_BIT(3, 1))
+     MATRIX_BIT(3, 2))
 #else
 #error "Toucan soft power requires a Toucan left or right shield"
 #endif
@@ -575,7 +575,7 @@ static int position_state_changed_listener(const zmk_event_t *eh) {
             return ZMK_EV_EVENT_BUBBLE;
         }
 
-        /* The layer-thumb press was reported normally, so report its release too. */
+        /* The outer layer-thumb press was reported normally, so report its release too. */
         schedule_power_off_if_released();
         return ZMK_EV_EVENT_BUBBLE;
     }

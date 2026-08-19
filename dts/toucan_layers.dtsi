@@ -1,0 +1,22 @@
+/*
+ * Shared Toucan layer indexes.
+ *
+ * Keep this file as the single source of truth for both the keymap and shield
+ * input processors. Layer order still has normal ZMK priority semantics: a
+ * higher numbered active layer wins when its binding is not transparent.
+ */
+
+#ifndef TOUCAN_LAYERS_H
+#define TOUCAN_LAYERS_H
+
+#define TOUCAN_BASE 0
+#define TOUCAN_SYM 1
+#define TOUCAN_NAV 2
+#define TOUCAN_CLIP 3
+#define TOUCAN_EDIT 4
+#define TOUCAN_MOUSE 5
+#define TOUCAN_BT 6
+#define TOUCAN_SYS 7
+#define TOUCAN_DANGER 8
+
+#endif /* TOUCAN_LAYERS_H */
