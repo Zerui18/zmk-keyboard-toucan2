@@ -7,6 +7,8 @@ readonly BUILD_IMAGE="${ZMK_BUILD_IMAGE:-zmkfirmware/zmk-build-arm:stable}"
 readonly WORKSPACE_VOLUME="${ZMK_BUILD_VOLUME:-toucan2-zmk-v03}"
 readonly BOOTLOADER_PATH="${BOOTLOADER:-/Volumes/XIAO-BOOT}"
 readonly FIRMWARE_DIR="${REPO_ROOT}/firmware"
+readonly HOST_PYTHON="${PYTHON:-python3}"
+readonly USB_TOOL="${REPO_ROOT}/scripts/toucan-usb.py"
 
 log() {
     printf '==> %s\n' "$*"
@@ -26,6 +28,9 @@ Commands:
   build left|right      Build one firmware image
   install left|right    Build and copy one image to the bootloader
   flash left|right      Copy an existing image to the bootloader
+  install-both          Build, reboot, and flash both USB-connected halves
+  flash-both            Reboot and flash both halves with existing images
+  usb-check             Verify both runtime USB ports are available
   update                Update all West-managed dependencies
   clean                 Remove generated build output
   doctor                Check the local development environment
@@ -83,6 +88,49 @@ build_side() {
     run_container build "$side"
 }
 
+run_usb_tool() {
+    command -v "$HOST_PYTHON" >/dev/null 2>&1 || die "Python is not installed: ${HOST_PYTHON}"
+    [[ -f "$USB_TOOL" ]] || die "missing USB helper: ${USB_TOOL}"
+    "$HOST_PYTHON" "$USB_TOOL" "$@"
+}
+
+wait_for_bootloader_mount() {
+    local deadline=$((SECONDS + 10))
+    local ready_checks=0
+
+    while (( SECONDS < deadline )); do
+        # Disk Arbitration creates the root-owned mount-point directory shortly
+        # before the FAT filesystem is attached. Seeing only the directory can
+        # race cp and produce a misleading EACCES. INFO_UF2.TXT proves that the
+        # actual XIAO bootloader filesystem is mounted; require it twice so the
+        # mount has a brief settling interval as well.
+        if [[ -r "${BOOTLOADER_PATH}/INFO_UF2.TXT" ]]; then
+            ((ready_checks += 1))
+            if (( ready_checks >= 2 )); then
+                return 0
+            fi
+        else
+            ready_checks=0
+        fi
+        sleep 0.1
+    done
+
+    die "bootloader did not become ready at ${BOOTLOADER_PATH}"
+}
+
+wait_for_bootloader_unmount() {
+    local deadline=$((SECONDS + 10))
+
+    while (( SECONDS < deadline )); do
+        if [[ ! -d "$BOOTLOADER_PATH" ]]; then
+            return 0
+        fi
+        sleep 0.1
+    done
+
+    die "bootloader remained mounted at ${BOOTLOADER_PATH} after flashing"
+}
+
 flash_side() {
     local side="$1"
     local artifact
@@ -91,8 +139,8 @@ flash_side() {
     validate_side "$side"
     artifact="$(artifact_for_side "$side")"
     [[ -s "$artifact" ]] || die "missing firmware: ${artifact}; run 'make ${side}' first"
-    [[ -d "$BOOTLOADER_PATH" ]] || die \
-        "bootloader not found at ${BOOTLOADER_PATH}; double-tap reset, then retry"
+    [[ -r "${BOOTLOADER_PATH}/INFO_UF2.TXT" ]] || die \
+        "bootloader not ready at ${BOOTLOADER_PATH}; double-tap reset, then retry"
 
     destination="${BOOTLOADER_PATH}/$(basename "$artifact")"
     log "Flashing Toucan2 ${side}: ${artifact} -> ${destination}"
@@ -105,6 +153,37 @@ flash_side() {
         cp "$artifact" "$destination"
     fi
     log "Copy complete; the XIAO bootloader may now unmount and reboot"
+}
+
+auto_flash_side() {
+    local side="$1"
+
+    validate_side "$side"
+    [[ ! -d "$BOOTLOADER_PATH" ]] || die \
+        "unexpected bootloader already mounted at ${BOOTLOADER_PATH}; eject or flash it manually"
+
+    run_usb_tool touch "$side"
+    wait_for_bootloader_mount
+    flash_side "$side"
+    wait_for_bootloader_unmount
+    run_usb_tool wait "$side" --timeout 15
+}
+
+auto_flash_both() {
+    local side
+    local artifact
+
+    for side in left right; do
+        artifact="$(artifact_for_side "$side")"
+        [[ -s "$artifact" ]] || die \
+            "missing firmware: ${artifact}; run 'make all' or 'make install-both' first"
+    done
+
+    run_usb_tool check
+    auto_flash_side left
+    auto_flash_side right
+    run_usb_tool check
+    log "Both Toucan2 halves flashed successfully"
 }
 
 doctor() {
@@ -170,8 +249,21 @@ main() {
             build_side "$side"
             flash_side "$side"
             ;;
+        install-both)
+            run_usb_tool check
+            require_docker
+            build_side left
+            build_side right
+            auto_flash_both
+            ;;
         flash)
             flash_side "$side"
+            ;;
+        flash-both)
+            auto_flash_both
+            ;;
+        usb-check)
+            run_usb_tool check
             ;;
         clean)
             require_docker

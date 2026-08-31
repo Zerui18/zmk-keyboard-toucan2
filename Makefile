@@ -10,13 +10,14 @@ PYTHON ?= python3
 export BOOTLOADER
 export ZMK_BUILD_IMAGE
 export ZMK_BUILD_VOLUME
+export PYTHON
 
 INSTALL_REQUESTED := $(filter install,$(MAKECMDGOALS))
 INSTALL_SIDE_GOALS := $(filter left right,$(MAKECMDGOALS))
 
 .PHONY: help setup doctor left right all install install-left install-right \
-	flash-left flash-right west-update clean shell sync-upstream format-keymap \
-	check-keymap-format install-hooks
+	install-both flash-left flash-right flash-both usb-check west-update clean \
+	shell sync-upstream format-keymap check-keymap-format install-hooks
 
 help:
 	@printf '%s\n' \
@@ -29,6 +30,9 @@ help:
 		'  make install right        Build and flash the right half' \
 		'  make install-left         Alias for make install left' \
 		'  make install-right        Alias for make install right' \
+		'  make install-both         Build, reboot, and flash both USB-connected halves' \
+		'  make flash-both           Reboot and flash both halves with existing images' \
+		'  make usb-check            Verify both runtime USB ports are available' \
 		'  make format-keymap        Reflow layers to the physical split layout' \
 		'  make check-keymap-format  Check formatting without changing files' \
 		'  make install-hooks        Enable the repository pre-commit hooks' \
@@ -88,6 +92,15 @@ install-left flash-left:
 
 install-right flash-right:
 	@$(ZMK_TOOL) install right
+
+install-both:
+	@$(ZMK_TOOL) install-both
+
+flash-both:
+	@$(ZMK_TOOL) flash-both
+
+usb-check:
+	@$(ZMK_TOOL) usb-check
 
 west-update:
 	@$(ZMK_TOOL) update

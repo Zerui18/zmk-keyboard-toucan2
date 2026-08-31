@@ -24,8 +24,8 @@ firmware/toucan_left.uf2
 firmware/toucan_right.uf2
 ```
 
-To build and flash a half, double-tap reset on that half so the XIAO bootloader
-is mounted, then run one of:
+To build and flash a half manually, double-tap reset on that half so the XIAO
+bootloader is mounted, then run one of:
 
 ```sh
 make install left
@@ -38,6 +38,41 @@ default bootloader path is `/Volumes/XIAO-BOOT`; override it when needed:
 ```sh
 make install left BOOTLOADER=/Volumes/XIAO-BOOT
 ```
+
+### One-command two-half flashing
+
+The firmware exposes a side-specific USB serial port and supports a guarded
+two-stage bootloader handshake (1200-baud DTR on/off followed by 2400-baud DTR
+on/off within two seconds). Once both halves have this firmware, connect both
+of them to the Mac with USB data cables, close ZMK Studio or any serial monitor,
+and run:
+
+```sh
+make install-both
+```
+
+That command verifies that exactly one `Toucan Left` and one `Toucan Right`
+runtime USB port are present, builds both images, puts the left half into UF2
+and flashes it, waits for it to return, then does the same to the right. The
+halves are handled sequentially so the shared `/Volumes/XIAO-BOOT` volume name
+cannot send an image to the wrong side.
+
+Useful related commands are:
+
+```sh
+make usb-check    # only verify and show the two runtime serial ports
+make flash-both   # reuse the existing firmware/*.uf2 files
+```
+
+This automation currently targets macOS. It uses only the system Python,
+`ioreg`, and the USB serial driver; no Python package is required. Override the
+UF2 mount path with `BOOTLOADER=...` just as with the one-half commands.
+
+There is one bootstrap step: firmware installed before this feature cannot be
+rebooted from the host, and the old right-half firmware has no serial port.
+Build this revision and manually flash each half once with `make install left`
+and `make install right`. After that, `make install-both` handles future
+iterations without the reset switches.
 
 Run `make help` for all development targets. In particular:
 

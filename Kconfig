@@ -91,6 +91,20 @@ config TOUCAN_PLATFORM_MODE
       GUI in macOS mode and Control in Windows mode, while dedicated Control
       bindings remain unchanged. The selected mode persists across resets.
 
+config TOUCAN_USB_BOOTLOADER_TOUCH
+    bool "Toucan guarded USB bootloader trigger"
+    default y if SHIELD_TOUCAN_LEFT || SHIELD_TOUCAN_RIGHT
+    depends on SOC_NRF52840
+    depends on USB_CDC_ACM && UART_LINE_CTRL
+    depends on NRF_STORE_REBOOT_TYPE_GPREGRET
+    help
+      Enter the XIAO UF2 bootloader only after the host performs DTR on/off at
+      1200 baud and then DTR on/off at 2400 baud within two seconds. This is
+      used by the local automatic two-half flashing tool and does not consume
+      serial data, so the left half can continue to use the same port for ZMK
+      Studio. The guarded sequence avoids standard 1200-baud-touch software
+      accidentally putting the keyboard into its bootloader.
+
 config TOUCAN_SPLIT_XY_PACKING
     bool "Pack Toucan split trackpad X/Y reports"
     default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_SPLIT_XY_PACKER))

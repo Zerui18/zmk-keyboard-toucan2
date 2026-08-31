@@ -15,6 +15,10 @@ target_sources_ifdef(CONFIG_TOUCAN_PLATFORM_MODE app PRIVATE
   src/toucan_platform_mode.c
 )
 
+target_sources_ifdef(CONFIG_TOUCAN_USB_BOOTLOADER_TOUCH app PRIVATE
+  src/toucan_usb_bootloader_touch.c
+)
+
 target_sources_ifdef(CONFIG_TOUCAN_SPLIT_XY_PACKING app PRIVATE
   src/toucan_split_xy_packing.c
 )

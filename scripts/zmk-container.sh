@@ -78,6 +78,9 @@ ensure_workspace() {
 build_side() {
     local side="$1"
     local build_dir="${BUILD_ROOT}/${side}"
+    local build_signature
+    local build_signature_stamp="${BUILD_ROOT}/.${side}-build-command.sha256"
+    local previous_build_signature=""
     local artifact="${FIRMWARE_DIR}/toucan_${side}.uf2"
     local -a west_args=(
         build
@@ -101,6 +104,7 @@ build_side() {
             )
             ;;
         right)
+            west_args+=(-S studio-rpc-usb-uart)
             cmake_args+=("-DSHIELD=toucan_right rgbled_adapter")
             ;;
         *)
@@ -108,6 +112,18 @@ build_side() {
             exit 2
             ;;
     esac
+
+    build_signature="$(
+        printf '%s\n' "${west_args[@]}" -- "${cmake_args[@]}" | sha256sum | awk '{print $1}'
+    )"
+    if [[ -f "$build_signature_stamp" ]]; then
+        previous_build_signature="$(<"$build_signature_stamp")"
+    fi
+
+    if [[ "$build_signature" != "$previous_build_signature" && -d "$build_dir" ]]; then
+        log "Build configuration changed; cleaning cached ${side} CMake output"
+        cmake -E remove_directory "$build_dir"
+    fi
 
     ensure_workspace false
     mkdir -p "$FIRMWARE_DIR"
@@ -122,6 +138,7 @@ build_side() {
     }
 
     install -m 0644 "${build_dir}/zephyr/zmk.uf2" "$artifact"
+    printf '%s\n' "$build_signature" >"$build_signature_stamp"
     log "Firmware ready: ${artifact}"
 }
 
@@ -129,6 +146,8 @@ clean_outputs() {
     log "Removing generated build output"
     cmake -E remove_directory "$BUILD_ROOT"
     rm -f \
+        "${BUILD_ROOT}/.left-build-command.sha256" \
+        "${BUILD_ROOT}/.right-build-command.sha256" \
         "${FIRMWARE_DIR}/toucan_left.uf2" \
         "${FIRMWARE_DIR}/toucan_right.uf2"
 }
