@@ -26,8 +26,8 @@ Usage: scripts/zmk.sh COMMAND [SIDE]
 Commands:
   setup                 Initialize the persistent West workspace
   build left|right      Build one firmware image
-  install left|right    Build and copy one image to the bootloader
-  flash left|right      Copy an existing image to the bootloader
+  install left|right    Build, reboot, and flash one half
+  flash left|right      Reboot and flash one half with an existing image
   install-both          Build, reboot, and flash both USB-connected halves
   flash-both            Reboot and flash both halves with existing images
   usb-check             Verify both runtime USB ports are available
@@ -157,13 +157,24 @@ flash_side() {
 
 auto_flash_side() {
     local side="$1"
+    local artifact
 
     validate_side "$side"
-    [[ ! -d "$BOOTLOADER_PATH" ]] || die \
-        "unexpected bootloader already mounted at ${BOOTLOADER_PATH}; eject or flash it manually"
+    artifact="$(artifact_for_side "$side")"
+    [[ -s "$artifact" ]] || die "missing firmware: ${artifact}; run 'make ${side}' first"
 
-    run_usb_tool touch "$side"
-    wait_for_bootloader_mount
+    # Accept a half that was put into UF2 manually as a bootstrap/fallback.
+    # Otherwise use the side-specific runtime USB identity and guarded serial
+    # handshake so the requested half is the one that enters the bootloader.
+    if [[ -r "${BOOTLOADER_PATH}/INFO_UF2.TXT" ]]; then
+        log "Bootloader already ready at ${BOOTLOADER_PATH}; flashing ${side}"
+    else
+        [[ ! -d "$BOOTLOADER_PATH" ]] || die \
+            "bootloader mount point exists but is not ready at ${BOOTLOADER_PATH}; eject it, then retry"
+        run_usb_tool touch "$side"
+        wait_for_bootloader_mount
+    fi
+
     flash_side "$side"
     wait_for_bootloader_unmount
     run_usb_tool wait "$side" --timeout 15
@@ -247,7 +258,7 @@ main() {
         install)
             require_docker
             build_side "$side"
-            flash_side "$side"
+            auto_flash_side "$side"
             ;;
         install-both)
             run_usb_tool check
@@ -257,7 +268,7 @@ main() {
             auto_flash_both
             ;;
         flash)
-            flash_side "$side"
+            auto_flash_side "$side"
             ;;
         flash-both)
             auto_flash_both

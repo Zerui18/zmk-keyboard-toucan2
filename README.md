@@ -24,16 +24,20 @@ firmware/toucan_left.uf2
 firmware/toucan_right.uf2
 ```
 
-To build and flash a half manually, double-tap reset on that half so the XIAO
-bootloader is mounted, then run one of:
+To build, automatically reboot, and flash one USB-connected half, run one of:
 
 ```sh
 make install left
 make install right
 ```
 
-The equivalent aliases are `make install-left` and `make install-right`. The
-default bootloader path is `/Volumes/XIAO-BOOT`; override it when needed:
+The equivalent aliases are `make install-left` and `make install-right`. To
+reuse an image that is already in `firmware/` without rebuilding it, use
+`make flash-left` or `make flash-right`.
+
+The single-half commands use that half's side-specific USB identity and the
+same guarded bootloader handshake as the two-half command below. The default
+bootloader path is `/Volumes/XIAO-BOOT`; override it when needed:
 
 ```sh
 make install left BOOTLOADER=/Volumes/XIAO-BOOT
@@ -70,9 +74,11 @@ UF2 mount path with `BOOTLOADER=...` just as with the one-half commands.
 
 There is one bootstrap step: firmware installed before this feature cannot be
 rebooted from the host, and the old right-half firmware has no serial port.
-Build this revision and manually flash each half once with `make install left`
-and `make install right`. After that, `make install-both` handles future
-iterations without the reset switches.
+Build that half with `make left` or `make right`, double-tap its reset so
+`XIAO-BOOT` mounts, then run `make flash-left` or `make flash-right`. The
+single-half command detects an already-mounted bootloader as a manual fallback.
+After both halves have the guarded-handshake firmware, all install and flash
+commands can enter UF2 without the reset switches.
 
 Run `make help` for all development targets. In particular:
 

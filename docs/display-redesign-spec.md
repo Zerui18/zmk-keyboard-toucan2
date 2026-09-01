@@ -537,6 +537,11 @@ The handoff in `/Users/zeruichen/Downloads/handoff` is now implemented as the
 single linked status renderer. It uses the handoff's embedded 5×6 status font,
 4×5 layer font, pixel icons, and these five independently invalidated bands:
 
+The implemented polarity is subsequently inverted from the original reference:
+`CONFIG_NICE_VIEW_WIDGET_INVERTED=y` renders black UI pixels on a white
+background. Disabling that option restores the handoff's white-on-black
+polarity, including the sleep page.
+
 | Band | Content rows | Live source |
 | --- | --- | --- |
 | PWR | `3..30` | Both battery percentages, exact selected USB/BLE state, all BLE profile states, explicit right split connection, and relayed right USB power |

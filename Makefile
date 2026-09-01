@@ -30,6 +30,8 @@ help:
 		'  make install right        Build and flash the right half' \
 		'  make install-left         Alias for make install left' \
 		'  make install-right        Alias for make install right' \
+		'  make flash-left           Reboot and flash the left half with the existing image' \
+		'  make flash-right          Reboot and flash the right half with the existing image' \
 		'  make install-both         Build, reboot, and flash both USB-connected halves' \
 		'  make flash-both           Reboot and flash both halves with existing images' \
 		'  make usb-check            Verify both runtime USB ports are available' \
@@ -87,11 +89,17 @@ install:
 		exit 2; \
 	fi
 
-install-left flash-left:
+install-left:
 	@$(ZMK_TOOL) install left
 
-install-right flash-right:
+install-right:
 	@$(ZMK_TOOL) install right
+
+flash-left:
+	@$(ZMK_TOOL) flash left
+
+flash-right:
+	@$(ZMK_TOOL) flash right
 
 install-both:
 	@$(ZMK_TOOL) install-both

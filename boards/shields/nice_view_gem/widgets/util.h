@@ -10,8 +10,13 @@
 #define BUFFER_OFFSET_MIDDLE 0
 #define BUFFER_OFFSET_BOTTOM 0
 
+#if defined(CONFIG_NICE_VIEW_WIDGET_INVERTED) && CONFIG_NICE_VIEW_WIDGET_INVERTED
+#define LVGL_BACKGROUND lv_color_white()
+#define LVGL_FOREGROUND lv_color_black()
+#else
 #define LVGL_BACKGROUND lv_color_black()
 #define LVGL_FOREGROUND lv_color_white()
+#endif
 
 struct status_state {
     uint8_t battery;
