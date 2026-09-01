@@ -349,7 +349,7 @@ static void draw_power_band(struct zmk_widget_screen *widget) {
 
 static const char *layer_name(uint8_t layer_index, char *fallback, size_t fallback_size) {
     static const char *const names[] = {
-        "BASE", "SYM", "NAV", "CLP", "EDT", "MOU", "BT", "SYS", "DNG",
+        "BASE", "SYM", "NAV", "CLP", "EDT", "APP", "MOU", "BT", "SYS", "DNG",
     };
 
     if (layer_index < ARRAY_SIZE(names)) {

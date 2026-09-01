@@ -26,7 +26,7 @@
             bindings = <
                 &kp ESC                   &any_layer_tap TOUCAN_NAV Q  &kp W                      &kp E                      &kp R    &kp T      &kp Y     &kp U     &kp I          &kp O   &any_layer_tap TOUCAN_NAV P      &kp BSLH
                 &left_mod_tap LCTRL EQUAL &left_layer_tap TOUCAN_SYM A &s_layer_tap TOUCAN_CLIP S &d_layer_tap TOUCAN_EDIT D &kp F    &kp G      &kp H     &kp J     &kp K          &kp L   &right_layer_tap TOUCAN_SYM SEMI &right_mod_tap RCTRL SQT
-                &kp MINUS                 &left_mod_tap LSHFT Z        &kp X                      &kp C                      &kp V    &kp B      &kp N     &kp M     &kp COMMA      &kp DOT &right_mod_tap RSHFT FSLH        &kp UNDER
+                &kp MINUS                 &left_mod_tap LSHFT Z        &kp X                      &c_layer_tap TOUCAN_APP C  &kp V    &kp B      &kp N     &kp M     &kp COMMA      &kp DOT &right_mod_tap RSHFT FSLH        &kp UNDER
                                                                                                   &mo TOUCAN_BT              &kp BSPC &kp TAB    &kp ENTER &kp SPACE &mo TOUCAN_SYS
             >;
         };
@@ -68,6 +68,16 @@
                 &trans &trans &cmd_key Z &trans &cmd_key LS(Z) &trans    &trans &trans &trans &trans &trans &trans
                 &trans &trans &trans     &trans &trans         &trans    &trans &trans &trans &trans &trans &trans
                                          &trans &trans         &trans    &trans &trans &trans
+            >;
+        };
+
+        app {
+            display-name = "APP";
+            bindings = <
+                &trans &trans &trans                  &trans &trans              &trans    &trans &trans &trans &trans &trans &trans
+                &trans &trans &trans                  &trans &trans              &trans    &trans &trans &trans &trans &trans &trans
+                &trans &trans &app_switch_key LS(TAB) &trans &app_switch_key TAB &trans    &trans &trans &trans &trans &trans &trans
+                                                      &trans &trans              &trans    &trans &trans &trans
             >;
         };
 

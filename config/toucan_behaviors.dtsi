@@ -55,21 +55,24 @@
             hold-trigger-key-positions = <TOUCAN_LEFT_POSITIONS>;
         };
 
-        /* Q and P deliberately become NAV for any following key. */
+        /* Q and P use release order to distinguish NAV chords from rolls. */
         any_layer_tap: altht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "hold-preferred";
+            flavor = "balanced";
             tapping-term-ms = <200>;
+            require-prior-idle-ms = <125>;
             bindings = <&mo>, <&kp>;
         };
 
-        /* S holds CLIP only for D/F; D holds EDIT only for S/F. */
+        /* S holds CLIP only for D/F; D holds EDIT only for S/F. Release the
+         * leader first for a typing roll, or the target first for a chord. */
         s_layer_tap: sltht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "hold-preferred";
+            flavor = "balanced";
             tapping-term-ms = <200>;
+            require-prior-idle-ms = <125>;
             bindings = <&mo>, <&kp>;
             hold-trigger-key-positions = <15 16>;
         };
@@ -77,10 +80,22 @@
         d_layer_tap: dltht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "hold-preferred";
+            flavor = "balanced";
             tapping-term-ms = <200>;
+            require-prior-idle-ms = <125>;
             bindings = <&mo>, <&kp>;
             hold-trigger-key-positions = <14 16>;
+        };
+
+        /* C holds APP only for X/V, with the same rollover policy as S/D. */
+        c_layer_tap: cltht {
+            compatible = "zmk,behavior-hold-tap";
+            #binding-cells = <2>;
+            flavor = "balanced";
+            tapping-term-ms = <200>;
+            require-prior-idle-ms = <125>;
+            bindings = <&mo>, <&kp>;
+            hold-trigger-key-positions = <26 28>;
         };
 
         /* NAV E: hold Ctrl+Shift; tap Ctrl+Shift+Space. */

@@ -33,6 +33,8 @@ static atomic_t windows_mode;
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 static uint32_t active_command_keycodes[ACTIVE_COMMAND_POSITIONS];
 static bool active_command_valid[ACTIVE_COMMAND_POSITIONS];
+static uint32_t active_app_switch_keycodes[ACTIVE_COMMAND_POSITIONS];
+static bool active_app_switch_valid[ACTIVE_COMMAND_POSITIONS];
 #endif
 
 ZMK_EVENT_IMPL(toucan_platform_mode_changed);
@@ -53,6 +55,12 @@ static uint32_t resolve_command_keycode(uint32_t requested_keycode) {
 
     uint32_t command_modifier = toucan_platform_is_windows() ? MOD_LCTL : MOD_LGUI;
     return APPLY_MODS(SELECT_MODS(requested_keycode) | command_modifier,
+                      STRIP_MODS(requested_keycode));
+}
+
+static uint32_t resolve_app_switch_keycode(uint32_t requested_keycode) {
+    uint32_t switch_modifier = toucan_platform_is_windows() ? MOD_LALT : MOD_LGUI;
+    return APPLY_MODS(SELECT_MODS(requested_keycode) | switch_modifier,
                       STRIP_MODS(requested_keycode));
 }
 #endif
@@ -171,6 +179,86 @@ static const struct behavior_driver_api command_key_driver_api = {
                             CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &command_key_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(COMMAND_KEY_INST)
+
+#endif
+
+#undef DT_DRV_COMPAT
+#define DT_DRV_COMPAT zmk_behavior_toucan_app_switch_key
+
+#if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
+
+static int on_app_switch_key_pressed(struct zmk_behavior_binding *binding,
+                                     struct zmk_behavior_binding_event event) {
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    uint32_t encoded_keycode = resolve_app_switch_keycode(binding->param1);
+
+    if (event.position < ACTIVE_COMMAND_POSITIONS) {
+        active_app_switch_keycodes[event.position] = encoded_keycode;
+        active_app_switch_valid[event.position] = true;
+    }
+
+    return raise_zmk_keycode_state_changed_from_encoded(encoded_keycode, true,
+                                                        event.timestamp);
+#else
+    ARG_UNUSED(binding);
+    ARG_UNUSED(event);
+    return ZMK_BEHAVIOR_OPAQUE;
+#endif
+}
+
+static int on_app_switch_key_released(struct zmk_behavior_binding *binding,
+                                      struct zmk_behavior_binding_event event) {
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    uint32_t encoded_keycode = resolve_app_switch_keycode(binding->param1);
+
+    if (event.position < ACTIVE_COMMAND_POSITIONS &&
+        active_app_switch_valid[event.position]) {
+        encoded_keycode = active_app_switch_keycodes[event.position];
+        active_app_switch_valid[event.position] = false;
+    }
+
+    return raise_zmk_keycode_state_changed_from_encoded(encoded_keycode, false,
+                                                        event.timestamp);
+#else
+    ARG_UNUSED(binding);
+    ARG_UNUSED(event);
+    return ZMK_BEHAVIOR_OPAQUE;
+#endif
+}
+
+#if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_METADATA)
+static const struct behavior_parameter_value_metadata app_switch_key_param_values[] = {
+    {
+        .display_name = "Key",
+        .type = BEHAVIOR_PARAMETER_VALUE_TYPE_HID_USAGE,
+    },
+};
+
+static const struct behavior_parameter_metadata_set app_switch_key_metadata_set[] = {{
+    .param1_values = app_switch_key_param_values,
+    .param1_values_len = ARRAY_SIZE(app_switch_key_param_values),
+}};
+
+static const struct behavior_parameter_metadata app_switch_key_metadata = {
+    .sets = app_switch_key_metadata_set,
+    .sets_len = ARRAY_SIZE(app_switch_key_metadata_set),
+};
+#endif
+
+static const struct behavior_driver_api app_switch_key_driver_api = {
+    .binding_pressed = on_app_switch_key_pressed,
+    .binding_released = on_app_switch_key_released,
+    .locality = BEHAVIOR_LOCALITY_CENTRAL,
+#if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_METADATA)
+    .parameter_metadata = &app_switch_key_metadata,
+#endif
+};
+
+#define APP_SWITCH_KEY_INST(n)                                                                 \
+    BEHAVIOR_DT_INST_DEFINE(n, NULL, NULL, NULL, NULL, POST_KERNEL,                            \
+                            CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &app_switch_key_driver_api);
+
+DT_INST_FOREACH_STATUS_OKAY(APP_SWITCH_KEY_INST)
 
 #endif
 

@@ -386,17 +386,18 @@ The display should assume the following named layer set and access scheme.
 | 2 | `NAV` | Hold `Q` or `P` | Navigation, action shortcuts, thumb modifiers |
 | 3 | `CLP` | Hold `S`, then use `D`/`F` | Copy, cut, paste |
 | 4 | `EDT` | Hold `D`, then use `S`/`F` | Undo, redo |
-| 5 | `MOU` | Trackpad touch | Mouse buttons on thumbs |
-| 6 | `BT` | Hold outer-left thumb | Profile selection and guarded profile clear |
-| 7 | `SYS` | Hold outer-right thumb | Diagnostics, F-keys, volume, platform mode |
-| 8 | `DNG` | Hold both outer thumbs | Bootloader and reset |
+| 5 | `APP` | Hold `C`, then use `X`/`V` | Cycle backward/forward through applications |
+| 6 | `MOU` | Trackpad touch | Mouse buttons on thumbs |
+| 7 | `BT` | Hold outer-left thumb | Profile selection and guarded profile clear |
+| 8 | `SYS` | Hold outer-right thumb | Diagnostics, F-keys, volume, platform mode |
+| 9 | `DNG` | Hold both outer thumbs | Bootloader and reset |
 
 ### Base
 
 ```text
 Esc     Q/NAV   W       E       R       T        Y       U       I       O       P/NAV   \
 =/Ctrl  A/SYM   S/CLIP  D/EDIT  F       G        H       J       K       L       ;/SYM   '/Ctrl
--       Z/Shift X       C       V       B        N       M       ,       .       //Shift _
+-       Z/Shift X       C/APP   V       B        N       M       ,       .       //Shift _
 
                     BT  Backspace  Tab        Enter  Space  SYS
 ```
@@ -424,8 +425,12 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
 
 - `CLP`: `S→D` tap = copy, `S→D` hold = cut, `S→F` = paste.
 - `EDT`: `D→S` = undo, `D→F` = redo.
+- `APP`: `C→X` = Shift+Command+Tab on macOS or Shift+Alt+Tab on Windows;
+  `C→V` = Command+Tab on macOS or Alt+Tab on Windows.
 - `NAV+D`: one tap sends Shift+Enter; double tap sends GUI+Enter.
 - `&cmd_key` sends GUI on macOS and Control on Windows; the selection persists.
+- `&app_switch_key` sends GUI on macOS and Alt on Windows using that same
+  persisted selection.
 
 ### Mouse, Bluetooth, system, and danger
 
@@ -444,9 +449,11 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
 - All relevant hold-taps use a 200 ms tapping term.
 - Ctrl, Shift, `A/SYM`, and `;/SYM` become holds early only for opposite-hand
   chords, preserving ordinary same-hand rolls.
-- `Q/P` become NAV for any following key.
-- `S` becomes CLP early only for `D`/`F`; `D` becomes EDT early only for
-  `S`/`F`.
+- `Q/P`, `S`, `D`, and `C` use the balanced flavor with a 125 ms prior-idle
+  guard. Rolls type normally when the leader is released first; deliberate
+  chords release the target first while continuing to hold the leader.
+- `S` can select CLP only for `D`/`F`, `D` can select EDT only for `S`/`F`, and
+  `C` can select APP only for `X`/`V`.
 - Text combos use a 50 ms timeout: `J+K → <-`, `K+L → ->`,
   `M+, → <=`, `,+. → =>`.
 - On SYM, the same physical `J+K` and `K+L` positions emit `.` and `,`.

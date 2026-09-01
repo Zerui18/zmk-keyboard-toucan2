@@ -1,93 +1,135 @@
 # Toucan Moonlander-derived layout
 
-This is the implemented Toucan port of the middle three Moonlander rows and
-the four used Moonlander thumb keys. The Moonlander's innermost columns, top
-row, extra row, and unreachable innermost thumb keys are intentionally omitted.
+This is the current Toucan port of the useful middle three Moonlander rows and
+four inner thumb keys. The Moonlander's top and extra rows, innermost columns,
+and unreachable innermost thumb keys are omitted. Toucan's two outer thumb
+keys provide the new Bluetooth and system layers.
 
-Layer indexes are defined once in [`dts/toucan_layers.dtsi`](../dts/toucan_layers.dtsi).
-The keymap and trackpad processors both consume those names instead of numeric
-layer literals.
+The physical order in every diagram is left half, then right half. `___` means
+transparent: the binding from the next active layer below is used. Layer
+indexes are defined in [`dts/toucan_layers.dtsi`](../dts/toucan_layers.dtsi),
+and the keymap, display, combos, and trackpad processors use those shared names.
 
 ## Base layer
 
-```text
-Esc     Q/NAV   W       E       R       T        Y       U       I       O       P/NAV   \
-=/Ctrl  A/SYM   S/CLIP  D/EDIT  F       G        H       J       K       L       ;/SYM   '/Ctrl
--       Z/Shift X       C       V       B        N       M       ,       .       //Shift _
-
-                    BT  Backspace  Tab        Enter  Space  SYS
-```
-
-The thumb positions above are shown from the outside edge of the left half to
-the outside edge of the right half. Backspace/Tab and Enter/Space preserve the
-Moonlander sequence on the two inner Toucan thumb switches. All four remain
-single-role keys so ordinary Space and Backspace rollovers cannot become holds.
-
-## Layer access
-
-| Layer | Access | Purpose |
-| --- | --- | --- |
-| `BASE` | Default | Letters and punctuation |
-| `SYM` | Hold A or semicolon | Moonlander symbols and numpad |
-| `NAV` | Hold Q or P | Navigation, action shortcuts, and thumb modifiers |
-| `CLIP` | Hold S before D or F | Copy, cut, and paste |
-| `EDIT` | Hold D before S or F | Undo and redo |
-| `MOUSE` | Touch the trackpad | Existing mouse-button thumb layout |
-| `BT` | Hold the outer-left thumb | Bluetooth profiles and guarded clear |
-| `SYS` | Hold the outer-right thumb | Battery, function keys, volume, and mode |
-| `DANGER` | Hold both outer thumbs | Side-local bootloader and reset |
-
-`DANGER` is a conditional layer and is active only while both `BT` and `SYS`
-are held.
-
-## Hold-tap and editing policy
-
-All relevant hold-taps use a 200 ms tapping term.
-
-- Q and P become NAV when followed by any key, matching the Moonlander rule.
-- A, semicolon, Ctrl, and Shift become holds for opposite-hand chords. A
-  same-hand rollover resolves as the printed tap key.
-- S becomes CLIP early only for D or F.
-- D becomes EDIT early only for S or F.
-- Holding any of these keys through the tapping term still selects its hold.
-
-The order-sensitive editing chords are:
+Tap/hold pairs are written as `tap/hold`.
 
 ```text
-S then tap D    Command/Ctrl+C
-S then hold D   Command/Ctrl+X
-S then F        Command/Ctrl+V
-D then S        Command/Ctrl+Z
-D then F        Command/Ctrl+Shift+Z
+Esc        Q/NAV    W       E       R       T       | Y       U       I       O       P/NAV       Backslash
+Equal/Ctrl A/SYM    S/CLIP  D/EDIT  F       G       | H       J       K       L       Semicolon/SYM Quote/Ctrl
+Minus      Z/Shift  X       C/APP   V       B       | N       M       Comma   Dot     Slash/Shift  Underscore
+
+                                 BT  Backspace  Tab | Enter  Space  SYS
 ```
 
-Repeated taps of CLIP+D repeat copy. NAV+D retains the Moonlander tap dance:
-one tap sends Shift+Enter and two taps send GUI+Enter.
+The thumb row is shown from the outside of the left half to the outside of the
+right half. Backspace/Tab and Enter/Space occupy the two easier inner thumb
+positions and remain single-role, so their ordinary typing rollovers cannot
+become holds. The harder outer thumbs are dedicated momentary layer keys.
 
-## Symbol layer
+## Layers and access
+
+The display uses the short names shown below.
+
+| Index | Source name | Display | Access | Purpose |
+| ---: | --- | --- | --- | --- |
+| 0 | `BASE` | `BASE` | Default | Letters and punctuation |
+| 1 | `SYM` | `SYM` | Hold A or semicolon | Symbols and right-side numpad |
+| 2 | `NAV` | `NAV` | Hold Q or P | Navigation and action shortcuts |
+| 3 | `CLIP` | `CLP` | Hold S, then use D/F | Copy, cut, and paste |
+| 4 | `EDIT` | `EDT` | Hold D, then use S/F | Undo and redo |
+| 5 | `APP` | `APP` | Hold C, then use X/V | Cycle backward/forward through applications |
+| 6 | `MOUSE` | `MOU` | Touch the trackpad | Mouse buttons on the thumb row |
+| 7 | `BT` | `BT` | Hold outer-left thumb | Bluetooth profiles and guarded clear |
+| 8 | `SYS` | `SYS` | Hold outer-right thumb | Diagnostics, F-keys, media, and platform mode |
+| 9 | `DANGER` | `DNG` | Hold both outer thumbs | Side-local bootloader and reset |
+
+`DANGER` is a conditional layer: it exists only while `BT` and `SYS` are both
+active. Higher numbered active layers have normal ZMK priority.
+
+## Hold-tap resolution
+
+Typing-facing hold-taps use a 200 ms tapping term. No `quick-tap-ms` setting is
+currently enabled.
+
+Q/P, S, D, and C use the balanced flavor with a 125 ms prior-idle guard:
+
+- If the leader follows another non-modifier key within 125 ms, it resolves
+  immediately as its printed character.
+- Otherwise, releasing the leader before the target is a typing rollover.
+- Keeping the leader held until after the target is released is a deliberate
+  layer chord.
+- Holding the leader alone past 200 ms selects its layer, unless the prior-idle
+  guard already forced a tap.
+
+Before the tapping term expires, S can select CLIP only with D/F, D can select
+EDIT only with S/F, and C can select APP only with X/V. Their positional
+filters preserve all other same-hand rolls. Q and P can select NAV with any
+target once the balanced/prior-idle rules allow the hold.
+
+Equal/Ctrl, Z/Shift, Quote/Ctrl, Slash/Shift, A/SYM, and Semicolon/SYM retain
+the Achordion-style policy inherited from the Moonlander:
+
+- An opposite-hand interrupt selects the hold immediately.
+- A same-hand interrupt before 200 ms selects the printed tap.
+- Holding the key alone through 200 ms still selects the hold.
+
+## Symbol layer (`SYM`)
 
 ```text
-___  `  #  {  }  &        ^  1  2  3  *  F11
-___  !  $  (  )  @        0  4  5  6  \  F12
-___  %  |  [  ]  +        -  7  8  9  ~  ___
+___  Grave    Hash  LeftBrace  RightBrace  Ampersand | Caret  1  2  3  Asterisk  F11
+___  Exclaim  Dollar LeftParen RightParen  At        | 0      4  5  6  Backslash F12
+___  Percent  Pipe   LeftBracket RightBracket Plus   | Minus  7  8  9  Tilde     ___
+
+                                      ___  ___  ___  | ___  ___  ___
 ```
 
-On SYM, physical J+K sends `.` and K+L sends `,`.
+On SYM, the physical J+K positions produce a period and K+L produce a comma.
+This places both punctuation keys inside the right-side numpad without adding
+dedicated bindings.
 
-## Navigation layer
+## Navigation layer (`NAV`)
 
 ```text
-___  ___  Alt+Ctrl+Left  Ctrl+Shift/Space  RAlt+RCtrl+Right  ___    Left Down Up Right ___ ___
-___  ___  Cmd+[          Shift/GUI+Enter   Alt+Ctrl+Enter     Cmd+]  ___  ___  ___ ___   ___ ___
-___  ___  ___            ___               ___                ___    ___  ___  ___ ___   ___ ___
+___  ___  Alt+Ctrl+Left  Ctrl+Shift/Space  RAlt+RCtrl+Right  ___ | Left  Down  Up  Right  ___  ___
+___  ___  Cmd/Ctrl+[     Shift/GUI+Enter   Alt+Ctrl+Enter     Cmd/Ctrl+] | ___ ___ ___ ___ ___ ___
+___  ___  ___            ___               ___                ___ | ___   ___   ___ ___    ___  ___
 
-                    ___  ___  ___        Cmd  Alt  ___
+                                                    ___  ___  ___ | Cmd/Ctrl  Alt  ___
 ```
 
-The special E position holds Ctrl+Shift and taps Ctrl+Shift+Space. The right
-thumb Command and Alt bindings are single-role while NAV is active.
+The E position is itself a hold-tap: tapping sends Ctrl+Shift+Space, while
+holding it with an opposite-hand key holds Ctrl+Shift. The D position is a tap
+dance: one tap sends Shift+Enter and two taps send GUI+Enter. That double-tap
+uses GUI directly and is not changed by the macOS/Windows mode.
+
+The right inner thumb sends right Command on macOS or right Control on Windows.
+The adjacent thumb always sends right Alt.
+
+## Clipboard, editing, and app switching
+
+For a balanced chord, keep the leader held, tap and release the target, then
+release the leader.
+
+```text
+S then tap D       Command/Ctrl+C
+S then hold D      Command/Ctrl+X
+S then tap F       Command/Ctrl+V
+
+D then tap S       Command/Ctrl+Z
+D then tap F       Command/Ctrl+Shift+Z
+
+C then tap X       Shift+Command+Tab (macOS) or Shift+Alt+Tab (Windows)
+C then tap V       Command+Tab (macOS) or Alt+Tab (Windows)
+```
+
+CLIP+D uses a separate tap-preferred 200 ms hold-tap: a tap copies and a hold
+cuts. Repeated D taps therefore repeat copy. APP releases its platform modifier
+with each X/V tap; C can remain held to perform another step.
 
 ## Text combos
+
+The following positional combos have a 50 ms timeout:
 
 ```text
 J + K       -> "<-"
@@ -96,62 +138,112 @@ M + comma   -> "<="
 comma + dot -> "=>"
 ```
 
-The old password combo is deliberately not stored in the repository.
+They are active on BASE, NAV, CLIP, EDIT, and APP. The J/K/L positions have the
+separate period/comma meanings described above on SYM. The old password combo
+is deliberately not stored in this repository.
 
-## Bluetooth layer
+## Bluetooth layer (`BT`)
 
-The five visible slots follow the same non-mirrored numpad geometry as SYM,
-but on the left half. Labels 1-5 map to ZMK's internal profiles 0-4.
-
-```text
-___     BT1  BT2  BT3  ___  ___
-BT_CLR  BT4  BT5  ___  ___  ___
-___     ___  ___  ___  ___  ___
-```
-
-BT_CLR is inert when tapped. Hold it for one second to clear all bonds.
-
-## System and danger layers
-
-On SYS:
-
-- Z types both halves' raw battery voltage through the selected endpoint.
-- M toggles the persistent macOS/Windows shortcut mode.
-- Esc unlocks ZMK Studio.
-- The existing F1-F12 grid and volume-down/mute/volume-up keys are preserved.
-
-macOS mode makes `&cmd_key` send GUI/Command. Windows mode makes the same
-bindings send Control while leaving dedicated Control keys unchanged. This
-applies to navigation/editing shortcuts and trackpad zoom.
-
-On DANGER:
+Hold the outer-left thumb. All controls occupy one left-hand home-row run,
+starting with guarded clear and then profiles 1 through 5 from left to right:
 
 ```text
-Q             left bootloader       P             right bootloader
-A             left reset            semicolon     right reset
+___     ___  ___  ___  ___  ___ | ___  ___  ___  ___  ___  ___
+BT_CLR  BT1  BT2  BT3  BT4  BT5 | ___  ___  ___  ___  ___  ___
+___     ___  ___  ___  ___  ___ | ___  ___  ___  ___  ___  ___
+
+                         ___  ___  ___ | ___  ___  ___
 ```
 
-Reset behaviors use event-source locality. The physical half containing the
-danger key is therefore the half that resets or enters its UF2 bootloader.
+BT1-BT5 select ZMK profiles 0-4. Tapping BT_CLR is inert. Hold BT_CLR for two
+seconds to clear only the currently selected profile; it does not clear every
+bond. The display's five profile slots use the user-facing labels 1-5.
 
-## Mouse layer
+## System layer (`SYS`)
 
-Trackpad touch continues to hold MOUSE automatically. Alpha positions are
-transparent and the thumb row remains:
+Hold the outer-right thumb:
 
 ```text
-Middle  Left  Right        Left  Right  Middle
+Studio  ___      F7  F8  F9  F12 | VolumeDown  Mute  VolumeUp  ___   ___  ___
+___     ___      F4  F5  F6  F11 | ___         ___   ___       ___   ___  ___
+___     Battery  F1  F2  F3  F10 | ___         Mode  ___       ___   ___  ___
+
+                              ___  ___  ___ | ___  ___  ___
 ```
+
+- Studio unlocks ZMK Studio.
+- Battery requests the latest raw median ADC voltage from both halves. Each
+  available result is typed through the selected USB/BLE endpoint as
+  `left=NNNNmv` or `right=NNNNmv`, followed by Enter.
+- Mode toggles and persists the macOS/Windows shortcut mode.
+- F1-F12 use the left-side 3-by-4 arrangement shown above.
+- Volume down, mute, and volume up occupy the top-left three keys of the right
+  half.
+
+In macOS mode, `&cmd_key` adds GUI/Command; in Windows mode it adds Control.
+Dedicated Control bindings are unchanged. `&app_switch_key` instead adds
+Command on macOS or Alt on Windows. The same persisted mode therefore controls
+navigation/editing shortcuts, APP switching, and trackpad pinch zoom.
+
+## Danger layer (`DNG`)
+
+Hold both outer thumbs simultaneously:
+
+```text
+___  LeftBootloader  ___  ___  ___  ___ | ___  ___  ___  ___  RightBootloader  ___
+___  LeftReset       ___  ___  ___  ___ | ___  ___  ___  ___  RightReset       ___
+___  ___             ___  ___  ___  ___ | ___  ___  ___  ___  ___              ___
+
+                                  ___  ___  ___ | ___  ___  ___
+```
+
+These bindings use event-source locality. Physical Q and A operate on the left
+half; physical P and semicolon operate on the right half. Entering one half's
+bootloader or resetting it does not intentionally reset the other half.
+
+## Trackpad and mouse layer (`MOU`)
+
+Touching the right trackpad automatically holds MOUSE and makes the left display
+show `MOU`. All alpha positions are transparent. The thumb row becomes:
+
+```text
+                         Middle  Left  Right | Left  Right  Middle
+```
+
+Trackpad motion becomes scrolling while SYM or NAV is held. Pinch zoom sends
+Command+minus/equal on macOS or Control+minus/equal on Windows. Directional
+swipes in the current build send Ctrl+GUI+arrow shortcuts; unlike pinch zoom,
+those swipe bindings do not currently follow the runtime platform toggle.
 
 ## Per-half soft power
 
-Soft power now uses the new outer layer thumbs as its final keys:
+Each half enters and wakes from System OFF independently. Its exact five-key
+pattern is:
 
 ```text
-left:   A X D V + outer-left BT thumb
-right:  ; . K M + outer-right SYS thumb
+left:   A + X + D + V + outer-left BT thumb
+right:  semicolon + dot + K + M + outer-right SYS thumb
 ```
 
-The arming sequence and exact-pattern validation are unchanged. Both outer
-thumb switches use matrix row P0.29 and column P0.5, which is also the dedicated
-System OFF wake intersection.
+To shut down one half:
+
+1. With no other key held, tap and release that half's outer thumb within
+   200 ms.
+2. Press the same thumb again within 300 ms and keep holding it.
+3. Within the 1.5-second capture window, press the four character keys. All
+   four presses must fit inside a 120 ms window, with no extra key and no early
+   release.
+4. Release all five keys. The half enters System OFF after a 25 ms settling
+   interval.
+
+The four captured character presses are consumed and are not typed into the
+host application. Before System OFF, the left half requests display blanking
+and the right half puts the trackpad to sleep; normal BLE and keyboard activity
+then stop.
+
+For a reliable wake, hold the four character keys first, press the same outer
+thumb last, and keep the exact five-key pattern held. Early boot accepts it when
+it remains stable for 20 ms within the one-second validation window. A wrong,
+extra, or incomplete pattern is rejected and the half returns to System OFF
+after all keys are released. Reset and USB/VBUS startup remain recovery paths
+that bypass chord validation.

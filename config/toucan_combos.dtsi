@@ -44,14 +44,14 @@
         combo_left_arrow {
             timeout-ms = <50>;
             key-positions = <19 20>;
-            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT>;
+            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT TOUCAN_APP>;
             bindings = <&text_left_arrow>;
         };
 
         combo_right_arrow {
             timeout-ms = <50>;
             key-positions = <20 21>;
-            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT>;
+            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT TOUCAN_APP>;
             bindings = <&text_right_arrow>;
         };
 
@@ -59,14 +59,14 @@
         combo_fat_left_arrow {
             timeout-ms = <50>;
             key-positions = <31 32>;
-            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT>;
+            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT TOUCAN_APP>;
             bindings = <&text_fat_left_arrow>;
         };
 
         combo_fat_right_arrow {
             timeout-ms = <50>;
             key-positions = <32 33>;
-            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT>;
+            layers = <TOUCAN_BASE TOUCAN_NAV TOUCAN_CLIP TOUCAN_EDIT TOUCAN_APP>;
             bindings = <&text_fat_right_arrow>;
         };
 

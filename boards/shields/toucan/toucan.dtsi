@@ -16,6 +16,12 @@
             display-name = "Platform Command Key";
         };
 
+        app_switch_key: appswitch {
+            compatible = "zmk,behavior-toucan-app-switch-key";
+            #binding-cells = <1>;
+            display-name = "Platform App Switch Key";
+        };
+
         platform_mode: osmode {
             compatible = "zmk,behavior-toucan-platform-toggle";
             #binding-cells = <0>;

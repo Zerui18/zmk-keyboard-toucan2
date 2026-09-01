@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Zerui Chen
+# SPDX-License-Identifier: MIT
+
+description: Send a key with Command on macOS or Alt in Windows mode
+
+compatible: "zmk,behavior-toucan-app-switch-key"
+
+include: one_param.yaml
