@@ -74,10 +74,10 @@
         app {
             display-name = "APP";
             bindings = <
-                &trans &trans &trans                  &trans &trans              &trans    &trans &trans &trans &trans &trans &trans
-                &trans &trans &trans                  &trans &trans              &trans    &trans &trans &trans &trans &trans &trans
-                &trans &trans &app_switch_key LS(TAB) &trans &app_switch_key TAB &trans    &trans &trans &trans &trans &trans &trans
-                                                      &trans &trans              &trans    &trans &trans &trans
+                &trans &trans &trans      &trans &trans  &trans    &trans &trans &trans &trans &trans &trans
+                &trans &trans &trans      &trans &trans  &trans    &trans &trans &trans &trans &trans &trans
+                &trans &trans &kp LS(TAB) &trans &kp TAB &trans    &trans &trans &trans &trans &trans &trans
+                                          &trans &trans  &trans    &trans &trans &trans
             >;
         };
 

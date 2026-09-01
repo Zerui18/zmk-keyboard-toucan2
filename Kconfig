@@ -87,11 +87,11 @@ config TOUCAN_PLATFORM_MODE
     default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_PLATFORM_TOGGLE))
     depends on SETTINGS
     help
-      Provide the &cmd_key, &app_switch_key, and &platform_mode behaviors.
-      Command bindings send GUI in macOS mode and Control in Windows mode;
-      app switching sends GUI in macOS mode and Alt in Windows mode. Dedicated
-      Control bindings remain unchanged. The selected mode persists across
-      resets.
+      Provide the &cmd_key, &app_switch_layer, and &platform_mode behaviors.
+      Command bindings send GUI in macOS mode and Control in Windows mode. The
+      app-switch layer holds GUI in macOS mode or Alt in Windows mode until the
+      layer key is released. Dedicated Control bindings remain unchanged. The
+      selected mode persists across resets.
 
 config TOUCAN_USB_BOOTLOADER_TOUCH
     bool "Toucan guarded USB bootloader trigger"

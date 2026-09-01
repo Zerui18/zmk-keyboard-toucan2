@@ -1,5 +1,5 @@
 /*
- * Persistent macOS/Windows command-key mapping for the Toucan2.
+ * Persistent macOS/Windows shortcut mapping for the Toucan2.
  *
  * Copyright (c) 2026 Zerui Chen
  * SPDX-License-Identifier: MIT
@@ -20,6 +20,7 @@
 #include <dt-bindings/zmk/modifiers.h>
 #include <zmk/behavior.h>
 #include <zmk/events/keycode_state_changed.h>
+#include <zmk/keymap.h>
 #include <zmk/workqueue.h>
 
 #include "toucan_platform_mode.h"
@@ -27,14 +28,14 @@
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #define SETTINGS_KEY "toucan_platform/windows"
-#define ACTIVE_COMMAND_POSITIONS 64U
+#define ACTIVE_PLATFORM_POSITIONS 64U
 
 static atomic_t windows_mode;
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-static uint32_t active_command_keycodes[ACTIVE_COMMAND_POSITIONS];
-static bool active_command_valid[ACTIVE_COMMAND_POSITIONS];
-static uint32_t active_app_switch_keycodes[ACTIVE_COMMAND_POSITIONS];
-static bool active_app_switch_valid[ACTIVE_COMMAND_POSITIONS];
+static uint32_t active_command_keycodes[ACTIVE_PLATFORM_POSITIONS];
+static bool active_command_valid[ACTIVE_PLATFORM_POSITIONS];
+static uint32_t active_app_switch_modifiers[ACTIVE_PLATFORM_POSITIONS];
+static bool active_app_switch_valid[ACTIVE_PLATFORM_POSITIONS];
 #endif
 
 ZMK_EVENT_IMPL(toucan_platform_mode_changed);
@@ -58,10 +59,8 @@ static uint32_t resolve_command_keycode(uint32_t requested_keycode) {
                       STRIP_MODS(requested_keycode));
 }
 
-static uint32_t resolve_app_switch_keycode(uint32_t requested_keycode) {
-    uint32_t switch_modifier = toucan_platform_is_windows() ? MOD_LALT : MOD_LGUI;
-    return APPLY_MODS(SELECT_MODS(requested_keycode) | switch_modifier,
-                      STRIP_MODS(requested_keycode));
+static uint32_t resolve_app_switch_modifier(void) {
+    return toucan_platform_is_windows() ? LALT : LGUI;
 }
 #endif
 
@@ -112,7 +111,7 @@ static int on_command_key_pressed(struct zmk_behavior_binding *binding,
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     uint32_t encoded_keycode = resolve_command_keycode(binding->param1);
 
-    if (event.position < ACTIVE_COMMAND_POSITIONS) {
+    if (event.position < ACTIVE_PLATFORM_POSITIONS) {
         active_command_keycodes[event.position] = encoded_keycode;
         active_command_valid[event.position] = true;
     }
@@ -131,7 +130,7 @@ static int on_command_key_released(struct zmk_behavior_binding *binding,
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     uint32_t encoded_keycode = resolve_command_keycode(binding->param1);
 
-    if (event.position < ACTIVE_COMMAND_POSITIONS &&
+    if (event.position < ACTIVE_PLATFORM_POSITIONS &&
         active_command_valid[event.position]) {
         encoded_keycode = active_command_keycodes[event.position];
         active_command_valid[event.position] = false;
@@ -183,22 +182,38 @@ DT_INST_FOREACH_STATUS_OKAY(COMMAND_KEY_INST)
 #endif
 
 #undef DT_DRV_COMPAT
-#define DT_DRV_COMPAT zmk_behavior_toucan_app_switch_key
+#define DT_DRV_COMPAT zmk_behavior_toucan_app_switch_layer
 
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
-static int on_app_switch_key_pressed(struct zmk_behavior_binding *binding,
-                                     struct zmk_behavior_binding_event event) {
+static int on_app_switch_layer_pressed(struct zmk_behavior_binding *binding,
+                                       struct zmk_behavior_binding_event event) {
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-    uint32_t encoded_keycode = resolve_app_switch_keycode(binding->param1);
+    uint32_t modifier = resolve_app_switch_modifier();
 
-    if (event.position < ACTIVE_COMMAND_POSITIONS) {
-        active_app_switch_keycodes[event.position] = encoded_keycode;
+    if (event.position < ACTIVE_PLATFORM_POSITIONS) {
+        active_app_switch_modifiers[event.position] = modifier;
         active_app_switch_valid[event.position] = true;
     }
 
-    return raise_zmk_keycode_state_changed_from_encoded(encoded_keycode, true,
-                                                        event.timestamp);
+    int err =
+        raise_zmk_keycode_state_changed_from_encoded(modifier, true, event.timestamp);
+    if (err < 0) {
+        if (event.position < ACTIVE_PLATFORM_POSITIONS) {
+            active_app_switch_valid[event.position] = false;
+        }
+        return err;
+    }
+
+    err = zmk_keymap_layer_activate(binding->param1);
+    if (err < 0) {
+        (void)raise_zmk_keycode_state_changed_from_encoded(modifier, false, event.timestamp);
+        if (event.position < ACTIVE_PLATFORM_POSITIONS) {
+            active_app_switch_valid[event.position] = false;
+        }
+    }
+
+    return err;
 #else
     ARG_UNUSED(binding);
     ARG_UNUSED(event);
@@ -206,19 +221,21 @@ static int on_app_switch_key_pressed(struct zmk_behavior_binding *binding,
 #endif
 }
 
-static int on_app_switch_key_released(struct zmk_behavior_binding *binding,
-                                      struct zmk_behavior_binding_event event) {
+static int on_app_switch_layer_released(struct zmk_behavior_binding *binding,
+                                        struct zmk_behavior_binding_event event) {
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-    uint32_t encoded_keycode = resolve_app_switch_keycode(binding->param1);
+    uint32_t modifier = resolve_app_switch_modifier();
 
-    if (event.position < ACTIVE_COMMAND_POSITIONS &&
+    if (event.position < ACTIVE_PLATFORM_POSITIONS &&
         active_app_switch_valid[event.position]) {
-        encoded_keycode = active_app_switch_keycodes[event.position];
+        modifier = active_app_switch_modifiers[event.position];
         active_app_switch_valid[event.position] = false;
     }
 
-    return raise_zmk_keycode_state_changed_from_encoded(encoded_keycode, false,
-                                                        event.timestamp);
+    int layer_err = zmk_keymap_layer_deactivate(binding->param1);
+    int modifier_err =
+        raise_zmk_keycode_state_changed_from_encoded(modifier, false, event.timestamp);
+    return layer_err < 0 ? layer_err : modifier_err;
 #else
     ARG_UNUSED(binding);
     ARG_UNUSED(event);
@@ -227,38 +244,38 @@ static int on_app_switch_key_released(struct zmk_behavior_binding *binding,
 }
 
 #if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_METADATA)
-static const struct behavior_parameter_value_metadata app_switch_key_param_values[] = {
+static const struct behavior_parameter_value_metadata app_switch_layer_param_values[] = {
     {
-        .display_name = "Key",
-        .type = BEHAVIOR_PARAMETER_VALUE_TYPE_HID_USAGE,
+        .display_name = "Layer",
+        .type = BEHAVIOR_PARAMETER_VALUE_TYPE_LAYER_ID,
     },
 };
 
-static const struct behavior_parameter_metadata_set app_switch_key_metadata_set[] = {{
-    .param1_values = app_switch_key_param_values,
-    .param1_values_len = ARRAY_SIZE(app_switch_key_param_values),
+static const struct behavior_parameter_metadata_set app_switch_layer_metadata_set[] = {{
+    .param1_values = app_switch_layer_param_values,
+    .param1_values_len = ARRAY_SIZE(app_switch_layer_param_values),
 }};
 
-static const struct behavior_parameter_metadata app_switch_key_metadata = {
-    .sets = app_switch_key_metadata_set,
-    .sets_len = ARRAY_SIZE(app_switch_key_metadata_set),
+static const struct behavior_parameter_metadata app_switch_layer_metadata = {
+    .sets = app_switch_layer_metadata_set,
+    .sets_len = ARRAY_SIZE(app_switch_layer_metadata_set),
 };
 #endif
 
-static const struct behavior_driver_api app_switch_key_driver_api = {
-    .binding_pressed = on_app_switch_key_pressed,
-    .binding_released = on_app_switch_key_released,
+static const struct behavior_driver_api app_switch_layer_driver_api = {
+    .binding_pressed = on_app_switch_layer_pressed,
+    .binding_released = on_app_switch_layer_released,
     .locality = BEHAVIOR_LOCALITY_CENTRAL,
 #if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_METADATA)
-    .parameter_metadata = &app_switch_key_metadata,
+    .parameter_metadata = &app_switch_layer_metadata,
 #endif
 };
 
-#define APP_SWITCH_KEY_INST(n)                                                                 \
+#define APP_SWITCH_LAYER_INST(n)                                                               \
     BEHAVIOR_DT_INST_DEFINE(n, NULL, NULL, NULL, NULL, POST_KERNEL,                            \
-                            CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &app_switch_key_driver_api);
+                            CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &app_switch_layer_driver_api);
 
-DT_INST_FOREACH_STATUS_OKAY(APP_SWITCH_KEY_INST)
+DT_INST_FOREACH_STATUS_OKAY(APP_SWITCH_LAYER_INST)
 
 #endif
 

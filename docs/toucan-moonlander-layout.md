@@ -124,8 +124,11 @@ C then tap V       Command+Tab (macOS) or Alt+Tab (Windows)
 ```
 
 CLIP+D uses a separate tap-preferred 200 ms hold-tap: a tap copies and a hold
-cuts. Repeated D taps therefore repeat copy. APP releases its platform modifier
-with each X/V tap; C can remain held to perform another step.
+cuts. Repeated D taps therefore repeat copy. Once APP resolves as a hold, C
+keeps Command (macOS) or Alt (Windows) pressed. Releasing X/V therefore leaves
+the application switcher visible without advancing it again; tap X or V as
+many times as needed, then release C to release the modifier and choose the
+highlighted application.
 
 ## Text combos
 
@@ -181,9 +184,10 @@ ___     Battery  F1  F2  F3  F10 | ___         Mode  ___       ___   ___  ___
   half.
 
 In macOS mode, `&cmd_key` adds GUI/Command; in Windows mode it adds Control.
-Dedicated Control bindings are unchanged. `&app_switch_key` instead adds
-Command on macOS or Alt on Windows. The same persisted mode therefore controls
-navigation/editing shortcuts, APP switching, and trackpad pinch zoom.
+Dedicated Control bindings are unchanged. `&app_switch_layer` instead holds
+Command on macOS or Alt on Windows for the lifetime of the layer. The same
+persisted mode therefore controls navigation/editing shortcuts, APP switching,
+and trackpad pinch zoom.
 
 ## Danger layer (`DNG`)
 

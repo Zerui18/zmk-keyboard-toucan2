@@ -429,8 +429,9 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
   `C→V` = Command+Tab on macOS or Alt+Tab on Windows.
 - `NAV+D`: one tap sends Shift+Enter; double tap sends GUI+Enter.
 - `&cmd_key` sends GUI on macOS and Control on Windows; the selection persists.
-- `&app_switch_key` sends GUI on macOS and Alt on Windows using that same
-  persisted selection.
+- `&app_switch_layer` holds GUI on macOS or Alt on Windows until C is released,
+  using that same persisted selection. X/V send only Shift+Tab/Tab, so the
+  switcher remains visible between steps.
 
 ### Mouse, Bluetooth, system, and danger
 

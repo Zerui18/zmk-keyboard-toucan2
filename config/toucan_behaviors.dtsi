@@ -94,7 +94,7 @@
             flavor = "balanced";
             tapping-term-ms = <200>;
             require-prior-idle-ms = <125>;
-            bindings = <&mo>, <&kp>;
+            bindings = <&app_switch_layer>, <&kp>;
             hold-trigger-key-positions = <26 28>;
         };
 
