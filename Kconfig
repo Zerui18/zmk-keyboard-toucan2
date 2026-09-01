@@ -115,6 +115,16 @@ config TOUCAN_SPLIT_XY_PACKING
       each input event in its own BLE notification; packing prevents normal
       trackpad motion from exhausting the peripheral's small TX buffer pool.
 
+config TOUCAN_SPLIT_STATUS
+    bool "Toucan right-half link and USB-power status"
+    default y if SHIELD_TOUCAN_LEFT || SHIELD_TOUCAN_RIGHT
+    depends on ZMK_SPLIT && ZMK_INPUT_SPLIT && USB_DEVICE_STACK
+    help
+      Expose the right half's explicit split-link state on the central and
+      relay whether USB power is present on the peripheral. The left status
+      display uses this to distinguish a disconnected half from a flat
+      battery and to show the right-side USB power indicator.
+
 config TOUCAN_BATTERY_ESTIMATOR
     bool "Toucan filtered LiPo battery estimator"
     default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_BATTERY_ESTIMATOR))

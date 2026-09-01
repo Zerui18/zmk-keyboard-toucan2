@@ -102,13 +102,13 @@
             bindings = <&cmd_key>, <&cmd_key>;
         };
 
-        /* Releasing before one second is inert; holding clears all BT bonds. */
+        /* Releasing before two seconds is inert; holding clears the selected BT profile. */
         bt_clear_guard: btclrht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
             flavor = "tap-preferred";
-            tapping-term-ms = <1000>;
-            bindings = <&bt_clear_all>, <&none>;
+            tapping-term-ms = <2000>;
+            bindings = <&bt_clear_selected>, <&none>;
         };
 
         /* NAV D: Shift+Enter once, GUI+Enter twice, matching Moonlander TD1. */
@@ -141,7 +141,7 @@
             bindings = <&kp LC(LS(SPACE))>;
         };
 
-        bt_clear_all: btclear {
+        bt_clear_selected: btclear {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
             bindings = <&bt BT_CLR>;

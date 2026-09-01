@@ -22,6 +22,8 @@
 #include <zmk/events/keycode_state_changed.h>
 #include <zmk/workqueue.h>
 
+#include "toucan_platform_mode.h"
+
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #define SETTINGS_KEY "toucan_platform/windows"
@@ -33,21 +35,23 @@ static uint32_t active_command_keycodes[ACTIVE_COMMAND_POSITIONS];
 static bool active_command_valid[ACTIVE_COMMAND_POSITIONS];
 #endif
 
-static bool is_windows_mode(void) {
+ZMK_EVENT_IMPL(toucan_platform_mode_changed);
+
+bool toucan_platform_is_windows(void) {
     return atomic_get(&windows_mode) != 0;
 }
 
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 static uint32_t resolve_command_keycode(uint32_t requested_keycode) {
     if (requested_keycode == 0U || requested_keycode == LGUI) {
-        return is_windows_mode() ? LCTRL : LGUI;
+        return toucan_platform_is_windows() ? LCTRL : LGUI;
     }
 
     if (requested_keycode == RGUI) {
-        return is_windows_mode() ? RCTRL : RGUI;
+        return toucan_platform_is_windows() ? RCTRL : RGUI;
     }
 
-    uint32_t command_modifier = is_windows_mode() ? MOD_LCTL : MOD_LGUI;
+    uint32_t command_modifier = toucan_platform_is_windows() ? MOD_LCTL : MOD_LGUI;
     return APPLY_MODS(SELECT_MODS(requested_keycode) | command_modifier,
                       STRIP_MODS(requested_keycode));
 }
@@ -56,7 +60,7 @@ static uint32_t resolve_command_keycode(uint32_t requested_keycode) {
 static void save_platform_mode_work_handler(struct k_work *work) {
     ARG_UNUSED(work);
 
-    uint8_t saved_mode = is_windows_mode() ? 1U : 0U;
+    uint8_t saved_mode = toucan_platform_is_windows() ? 1U : 0U;
     int err = settings_save_one(SETTINGS_KEY, &saved_mode, sizeof(saved_mode));
     if (err < 0) {
         LOG_WRN("Unable to persist Toucan platform mode (%d)", err);
@@ -180,8 +184,11 @@ static int on_platform_toggle_pressed(struct zmk_behavior_binding *binding,
     ARG_UNUSED(binding);
     ARG_UNUSED(event);
 
-    bool next_mode = !is_windows_mode();
+    bool next_mode = !toucan_platform_is_windows();
     atomic_set(&windows_mode, next_mode ? 1 : 0);
+
+    raise_toucan_platform_mode_changed(
+        (struct toucan_platform_mode_changed){.windows = next_mode});
 
     int err = k_work_submit_to_queue(zmk_workqueue_lowprio_work_q(),
                                      &save_platform_mode_work);

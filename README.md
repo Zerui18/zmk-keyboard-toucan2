@@ -90,7 +90,7 @@ Run `make help` for all development targets. In particular:
 - **Shared firmware options**: [config/toucan.conf](config/toucan.conf)
 - **Side-specific configs**: [boards/shields/toucan/toucan_left.conf](boards/shields/toucan/toucan_left.conf) and [boards/shields/toucan/toucan_right.conf](boards/shields/toucan/toucan_right.conf)
 - **Display layout and widgets**: [boards/shields/nice_view_gem](boards/shields/nice_view_gem)
-- **Display style selection**: `CONFIG_TOUCAN_STATUS_SCREEN` in [boards/shields/toucan/toucan_left.conf](boards/shields/toucan/toucan_left.conf)
+- **Display hardware, redraw budget, and dashboard implementation**: [docs/display-redesign-spec.md](docs/display-redesign-spec.md)
 - **Swipe shortcuts**: the `swipe_button_mapper` node in [boards/shields/toucan/toucan.dtsi](boards/shields/toucan/toucan.dtsi)
 - **Invert scroll / trackpad settings**: the `tps43_trackpad` node in [boards/shields/toucan/toucan_right.overlay](boards/shields/toucan/toucan_right.overlay)
 

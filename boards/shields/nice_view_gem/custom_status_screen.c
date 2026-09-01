@@ -3,9 +3,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-#include "assets/quinquefive_24.c"
-#include "assets/quinquefive_18.c"
-#include "assets/quinquefive_12.c"
+/* The dashboard has embedded 1-bit fonts; only the unchanged sleep page uses LVGL text. */
 #include "assets/quinquefive_8.c"
 #include "assets/custom_fonts.h"
 
