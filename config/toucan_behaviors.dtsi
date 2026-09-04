@@ -69,6 +69,28 @@
             hold-trigger-key-positions = <TOUCAN_LEFT_POSITIONS>;
         };
 
+        /* Backspace on tap; platform-aware Command/Control on a deliberate hold. */
+        thumb_cmd_tap: thumbcmd {
+            compatible = "zmk,behavior-hold-tap";
+            #binding-cells = <2>;
+            flavor = "balanced";
+            tapping-term-ms = <200>;
+            quick-tap-ms = <200>;
+            require-prior-idle-ms = <125>;
+            bindings = <&cmd_key>, <&kp>;
+        };
+
+        /* Tab on tap; Option/Alt on hold, with tap-then-hold Tab repeat. */
+        thumb_mod_tap: thumbmt {
+            compatible = "zmk,behavior-hold-tap";
+            #binding-cells = <2>;
+            flavor = "balanced";
+            tapping-term-ms = <200>;
+            quick-tap-ms = <200>;
+            require-prior-idle-ms = <125>;
+            bindings = <&kp>, <&kp>;
+        };
+
         /* A and semicolon hold SYM only for opposite-hand chords. */
         left_layer_tap: lltht {
             compatible = "zmk,behavior-hold-tap";

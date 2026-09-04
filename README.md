@@ -89,6 +89,7 @@ Run `make help` for all development targets. In particular:
 
 # Customizations
 
+- **Fresh-session continuation handoff**: [docs/session-handoff.md](docs/session-handoff.md)
 - **Keymap and layers**: [config/toucan.keymap](config/toucan.keymap)
 - **Implemented Moonlander-derived layout and controls**: [docs/toucan-moonlander-layout.md](docs/toucan-moonlander-layout.md)
 - **Combos/chording**: [config/toucan_combos.dtsi](config/toucan_combos.dtsi)
@@ -132,7 +133,7 @@ coulomb-counting fuel gauge.
 
 ### On-demand voltage readout
 
-Hold the outer-right `SYS` thumb and press the physical `Z` key bound to
+Hold the outer-right `FN` thumb and press the physical `Z` key bound to
 `&battery`. It types each half's latest recorded five-sample median through the
 currently selected USB or Bluetooth connection. These are the raw, uncalibrated
 readings:
@@ -152,9 +153,9 @@ Each half has an independent, deliberately armed pseudo-power chord. It uses ZMK
 soft off to disconnect Bluetooth, suspend the display or trackpad and enter the
 nRF52840's very-low-power System OFF state.
 
-- Left: tap and release the outer-left `BT` thumb, press and hold it again, then
+- Left: tap and release the outer-left `SYS` thumb, press and hold it again, then
   press `A`, `X`, `D`, and `V` while continuing to hold the thumb.
-- Right: do the same with the outer-right `SYS` thumb and the mirrored `;`, `.`,
+- Right: do the same with the outer-right `FN` thumb and the mirrored `;`, `.`,
   `K`, and `M` positions.
 
 Start with no keys held. The first thumb tap must take at most 200 ms; press the
@@ -165,7 +166,7 @@ release or timeout cancels the attempt. Once recognized, release everything to
 enter System OFF.
 
 The listener only observes the outer layer thumb and never delays it: an
-ordinary hold still activates and releases BT or SYS normally. Only the
+ordinary hold still activates and releases SYS or FN normally. Only the
 deliberate tap-release-hold sequence starts capturing the shutdown keys. It
 powers off only the half on which it was physically entered, so repeat it on
 the other half to power off both.

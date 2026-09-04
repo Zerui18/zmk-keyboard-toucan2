@@ -400,11 +400,14 @@ Esc     Q/NAV   W       E       R       T        Y       U       I       O      
 =/Ctrl  A/SYM   S/CLIP  D/EDIT  F       G        H       J       K       L       ;/SYM   '/Ctrl
 -       Z/Shift X       C/APP   V       B        N       M       ,       .       //Shift _
 
-                   SYS  Backspace  Tab        Enter  Space  FN
+                   SYS  Backspace/Cmd  Tab/Option        Enter  Space  FN
 ```
 
-All thumb keys are deliberately single-role. The outer thumbs are layer keys;
-the two inner keys per side preserve the Moonlander sequence.
+The outer thumbs are layer keys. The left Backspace thumb taps Backspace and
+holds platform-aware Command/Control; the adjacent thumb taps Tab and holds
+left Option/Alt. Both use balanced resolution, a 200 ms tapping term, a 200 ms
+quick-tap window for repeating their tap key, and a 125 ms prior-idle guard.
+Enter and Space remain single-role.
 
 ### Symbol
 
@@ -455,9 +458,10 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
 - All relevant hold-taps use a 200 ms tapping term.
 - Ctrl, Shift, `A/SYM`, and `;/SYM` become holds early only for opposite-hand
   chords, preserving ordinary same-hand rolls.
-- `Q/P`, `S`, `D`, and `C` use the balanced flavor with a 125 ms prior-idle
-  guard. Rolls type normally when the leader is released first; deliberate
-  chords release the target first while continuing to hold the leader.
+- `Q/P`, `S`, `D`, `C`, Backspace/Command, and Tab/Option use the balanced
+  flavor with a 125 ms prior-idle guard. Rolls type normally when the leader is
+  released first; deliberate chords release the target first while continuing
+  to hold the leader.
 - `S` can select CLP only for `D`/`F`, `D` can select EDT only for `S`/`F`, and
   `C` can select APP only for `X`/`V`.
 - Text combos use a 50 ms timeout: `J+K → <-`, `K+L → ->`,
@@ -626,7 +630,7 @@ The right half relays USB-power presence using private input-split code
 `0x7F02`, separate from packed trackpad X/Y code `0x7F01`. No display update is
 placed on the high-rate trackpad transport path.
 
-The verified 2026-09-03 builds use 361,296 B flash / 125,447 B RAM on the left
+The verified 2026-09-04 builds use 361,472 B flash / 125,495 B RAM on the left
 and 203,132 B flash / 43,676 B RAM on the right. The left `screen_widget` is
 24,952 B, including its single 24,192-byte canvas and live memory snapshot.
 Persistent memory is central-only; its five slots, capture state, held-key

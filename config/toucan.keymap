@@ -24,10 +24,10 @@
         base {
             display-name = "BASE";
             bindings = <
-                &kp ESC                   &any_layer_tap TOUCAN_NAV Q  &kp W                      &kp E                      &kp R    &kp T      &kp Y     &kp U     &kp I         &kp O   &any_layer_tap TOUCAN_NAV P      &kp BSLH
-                &left_mod_tap LCTRL EQUAL &left_layer_tap TOUCAN_SYM A &s_layer_tap TOUCAN_CLIP S &d_layer_tap TOUCAN_EDIT D &kp F    &kp G      &kp H     &kp J     &kp K         &kp L   &right_layer_tap TOUCAN_SYM SEMI &right_mod_tap RCTRL SQT
-                &kp MINUS                 &left_mod_tap LSHFT Z        &kp X                      &c_layer_tap TOUCAN_APP C  &kp V    &kp B      &kp N     &kp M     &kp COMMA     &kp DOT &right_mod_tap RSHFT FSLH        &kp UNDER
-                                                                                                  &mo TOUCAN_SYS             &kp BSPC &kp TAB    &kp ENTER &kp SPACE &mo TOUCAN_FN
+                &kp ESC                   &any_layer_tap TOUCAN_NAV Q  &kp W                      &kp E                      &kp R                 &kp T                      &kp Y     &kp U     &kp I         &kp O   &any_layer_tap TOUCAN_NAV P      &kp BSLH
+                &left_mod_tap LCTRL EQUAL &left_layer_tap TOUCAN_SYM A &s_layer_tap TOUCAN_CLIP S &d_layer_tap TOUCAN_EDIT D &kp F                 &kp G                      &kp H     &kp J     &kp K         &kp L   &right_layer_tap TOUCAN_SYM SEMI &right_mod_tap RCTRL SQT
+                &kp MINUS                 &left_mod_tap LSHFT Z        &kp X                      &c_layer_tap TOUCAN_APP C  &kp V                 &kp B                      &kp N     &kp M     &kp COMMA     &kp DOT &right_mod_tap RSHFT FSLH        &kp UNDER
+                                                                                                  &mo TOUCAN_SYS             &thumb_cmd_tap 0 BSPC &thumb_mod_tap LALT TAB    &kp ENTER &kp SPACE &mo TOUCAN_FN
             >;
         };
 

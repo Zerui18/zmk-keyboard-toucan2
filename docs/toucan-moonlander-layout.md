@@ -19,13 +19,15 @@ Esc        Q/NAV    W       E       R       T       | Y       U       I       O 
 Equal/Ctrl A/SYM    S/CLIP  D/EDIT  F       G       | H       J       K       L       Semicolon/SYM Quote/Ctrl
 Minus      Z/Shift  X       C/APP   V       B       | N       M       Comma   Dot     Slash/Shift  Underscore
 
-                                SYS  Backspace  Tab | Enter  Space  FN
+                                SYS  Backspace/Cmd  Tab/Option | Enter  Space  FN
 ```
 
 The thumb row is shown from the outside of the left half to the outside of the
-right half. Backspace/Tab and Enter/Space occupy the two easier inner thumb
-positions and remain single-role, so their ordinary typing rollovers cannot
-become holds. The harder outer thumbs are dedicated momentary layer keys.
+right half. Backspace/Command, Tab/Option, Enter, and Space occupy the easier
+inner thumb positions. The harder outer thumbs are dedicated momentary layer
+keys. The Backspace thumb sends Backspace on tap and holds Command on macOS or
+Control in Windows mode; the Tab thumb sends Tab on tap and holds left
+Option/Alt.
 
 ## Layers and access
 
@@ -61,6 +63,12 @@ Q/P, S, D, and C use the balanced flavor with a 125 ms prior-idle guard:
   layer chord.
 - Holding the leader alone past 200 ms selects its layer, unless the prior-idle
   guard already forced a tap.
+
+The Backspace/Command and Tab/Option thumbs use the same balanced 200 ms and
+125 ms prior-idle policy, without positional filters, so they can modify keys
+on either hand. Both have a 200 ms quick-tap window: tap the key and press it
+again within that window to hold and repeat its tap behavior instead of
+engaging its modifier.
 
 Before the tapping term expires, S can select CLIP only with D/F, D can select
 EDIT only with S/F, and C can select APP only with X/V. Their positional
