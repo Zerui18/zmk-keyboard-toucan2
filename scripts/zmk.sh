@@ -9,6 +9,7 @@ readonly BOOTLOADER_PATH="${BOOTLOADER:-/Volumes/XIAO-BOOT}"
 readonly FIRMWARE_DIR="${REPO_ROOT}/firmware"
 readonly HOST_PYTHON="${PYTHON:-python3}"
 readonly USB_TOOL="${REPO_ROOT}/scripts/toucan-usb.py"
+readonly FIRMWARE_GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short=7 HEAD 2>/dev/null || true)"
 
 log() {
     printf '==> %s\n' "$*"
@@ -59,6 +60,7 @@ docker_args() {
         run --rm --pull=missing \
         --mount "type=bind,source=${REPO_ROOT},target=/repo" \
         --mount "type=volume,source=${WORKSPACE_VOLUME},target=/workspace" \
+        --env "TOUCAN_GIT_SHA=${FIRMWARE_GIT_SHA}" \
         --workdir /workspace
 }
 

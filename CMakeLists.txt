@@ -1,11 +1,17 @@
 zephyr_include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 
-execute_process(
-  COMMAND git -C ${CMAKE_CURRENT_LIST_DIR} rev-parse --short=7 HEAD
-  OUTPUT_VARIABLE TOUCAN_GIT_SHA
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
-)
+# Linked worktrees can point outside Docker's /repo bind mount, so prefer the
+# revision resolved by the host build wrapper and fall back to an in-container
+# lookup for ordinary standalone checkouts.
+set(TOUCAN_GIT_SHA "$ENV{TOUCAN_GIT_SHA}")
+if(NOT TOUCAN_GIT_SHA)
+  execute_process(
+    COMMAND git -C ${CMAKE_CURRENT_LIST_DIR} rev-parse --short=7 HEAD
+    OUTPUT_VARIABLE TOUCAN_GIT_SHA
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+endif()
 if(NOT TOUCAN_GIT_SHA)
   set(TOUCAN_GIT_SHA UNKNOWN)
 endif()
