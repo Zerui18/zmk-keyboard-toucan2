@@ -594,9 +594,10 @@ dashboard transfers zero bytes.
 
 Page changes are seven top-down row reveals at 83 ms per frame. Each row is
 invalidated once by the transition itself, for one 3,362-byte full-frame cost
-rather than seven full-frame transfers. Layer names use four clipped roll
-frames at the same 12 Hz cadence. Saving a memory slot flashes only that cell
-for four 150 ms frames.
+rather than seven full-frame transfers. Layer-name changes replace and
+invalidate the 22-row LAYER band immediately, with no transition frames or
+animation delay. Saving a memory slot flashes only that cell for four 150 ms
+frames.
 
 ### Persistent memory interaction
 

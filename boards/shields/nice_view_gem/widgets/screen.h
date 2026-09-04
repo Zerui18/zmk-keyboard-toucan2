@@ -49,12 +49,6 @@ struct toucan_display_animation {
     bool boot_to_dashboard_pending;
     int64_t boot_to_dashboard_due;
 
-    bool layer_roll_active;
-    uint8_t layer_from;
-    uint8_t layer_to;
-    uint8_t layer_frame;
-    int64_t layer_due;
-
     bool pairing_blink_active;
     bool pairing_marker_visible;
     int64_t pairing_due;

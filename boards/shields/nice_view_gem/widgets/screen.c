@@ -77,8 +77,6 @@ enum dashboard_band {
 #define PAGE_TRANSITION_TOTAL_MS (PAGE_TRANSITION_FRAMES * PAGE_TRANSITION_FRAME_MS)
 #define PAGE_TRANSITION_GUARD_MS 50
 #define BOOT_HOLD_MS 450
-#define LAYER_ROLL_FRAMES 4
-#define LAYER_ROLL_FRAME_MS 83
 #define PAIRING_BLINK_MS 500
 #define LOW_BATTERY_BLINK_MS 1000
 #define LOW_BATTERY_PERCENT 15
@@ -357,26 +355,6 @@ static void draw_bitmap(struct zmk_widget_screen *widget, int x, int y,
     }
 }
 
-static void draw_bitmap_clipped(struct zmk_widget_screen *widget, int x, int y,
-                                const struct bitmap_glyph *glyph, int scale, int clip_y0,
-                                int clip_y1) {
-    for (int row = 0; row < glyph->height; row++) {
-        for (int col = 0; col < glyph->width; col++) {
-            if (glyph->pixels[row * glyph->width + col] != 'X') {
-                continue;
-            }
-
-            for (int py = 0; py < scale; py++) {
-                int target_y = y + row * scale + py;
-                if (target_y < clip_y0 || target_y > clip_y1) {
-                    continue;
-                }
-                fill_rect(widget, x + col * scale, target_y, scale, 1, true);
-            }
-        }
-    }
-}
-
 static int text_width(const char *text, int scale, const struct bitmap_glyph *glyphs,
                       size_t glyph_count) {
     int width = 0;
@@ -409,27 +387,6 @@ static int draw_text(struct zmk_widget_screen *widget, int x, int y, const char 
         const struct bitmap_glyph *glyph = find_glyph(glyphs, glyph_count, *cursor);
         if (glyph != NULL) {
             draw_bitmap(widget, cursor_x, y, glyph, scale);
-            cursor_x += (glyph->width + 1) * scale;
-        }
-    }
-
-    return MAX(0, cursor_x - x - scale);
-}
-
-static int draw_text_clipped(struct zmk_widget_screen *widget, int x, int y, const char *text,
-                             int scale, const struct bitmap_glyph *glyphs, size_t glyph_count,
-                             int clip_y0, int clip_y1) {
-    int cursor_x = x;
-
-    for (const char *cursor = text; *cursor != '\0'; cursor++) {
-        if (*cursor == ' ') {
-            cursor_x += 3 * scale;
-            continue;
-        }
-
-        const struct bitmap_glyph *glyph = find_glyph(glyphs, glyph_count, *cursor);
-        if (glyph != NULL) {
-            draw_bitmap_clipped(widget, cursor_x, y, glyph, scale, clip_y0, clip_y1);
             cursor_x += (glyph->width + 1) * scale;
         }
     }
@@ -1098,7 +1055,6 @@ static void schedule_next_animation(void) {
 
         if (!widget->animation.transition_active &&
             widget->animation.page == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
-            CONSIDER_DUE(widget->animation.layer_roll_active, widget->animation.layer_due);
             CONSIDER_DUE(widget->animation.pairing_blink_active,
                          widget->animation.pairing_due);
             CONSIDER_DUE(widget->animation.low_battery_blink_active,
@@ -1166,7 +1122,6 @@ static void finish_page_transition(struct zmk_widget_screen *widget) {
 static void start_page_transition(struct zmk_widget_screen *widget,
                                   enum toucan_display_page target, bool signal) {
     widget->animation.boot_to_dashboard_pending = false;
-    widget->animation.layer_roll_active = false;
     widget->animation.pairing_blink_active = false;
     widget->animation.low_battery_blink_active = false;
     widget->animation.local_bolt_blink_active = false;
@@ -1265,34 +1220,6 @@ uint32_t toucan_display_prepare_uf2(void) {
     return PAGE_TRANSITION_TOTAL_MS + PAGE_TRANSITION_GUARD_MS;
 }
 
-static void draw_layer_roll_frame(struct zmk_widget_screen *widget) {
-    char from_fallback[6];
-    char to_fallback[6];
-    const char *from = layer_name(widget->animation.layer_from, from_fallback,
-                                  sizeof(from_fallback));
-    const char *to = layer_name(widget->animation.layer_to, to_fallback, sizeof(to_fallback));
-    int frame = widget->animation.layer_frame + 1;
-    int offset = (frame * 26 + LAYER_ROLL_FRAMES / 2) / LAYER_ROLL_FRAMES;
-
-    clear_rows(widget, LAYER_Y, LAYER_HEIGHT);
-    int width = LAYER_TEXT_WIDTH(from, 4);
-    draw_text_clipped(widget, (SCREEN_WIDTH - width + 1) / 2, LAYER_Y - offset, from, 4,
-                      layer_glyphs, ARRAY_SIZE(layer_glyphs), LAYER_Y,
-                      LAYER_Y + 19);
-    width = LAYER_TEXT_WIDTH(to, 4);
-    draw_text_clipped(widget, (SCREEN_WIDTH - width + 1) / 2, LAYER_Y + 26 - offset, to, 4,
-                      layer_glyphs, ARRAY_SIZE(layer_glyphs), LAYER_Y,
-                      LAYER_Y + 19);
-    invalidate_rows(widget, LAYER_Y, 20);
-
-    widget->animation.layer_frame++;
-    if (widget->animation.layer_frame >= LAYER_ROLL_FRAMES) {
-        widget->animation.layer_roll_active = false;
-    } else {
-        widget->animation.layer_due += LAYER_ROLL_FRAME_MS;
-    }
-}
-
 static void update_bolt_animation(struct zmk_widget_screen *widget, bool right) {
     bool *active = right ? &widget->animation.right_bolt_blink_active
                          : &widget->animation.local_bolt_blink_active;
@@ -1349,9 +1276,6 @@ static void animation_work_handler(struct k_work *work) {
         }
 
         if (widget->animation.page == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
-            if (widget->animation.layer_roll_active && now >= widget->animation.layer_due) {
-                draw_layer_roll_frame(widget);
-            }
             if (widget->animation.pairing_blink_active &&
                 now >= widget->animation.pairing_due) {
                 widget->animation.pairing_marker_visible =
@@ -1546,17 +1470,13 @@ static void layer_update_cb(struct layer_state state) {
             continue;
         }
 
-        if (!widget->animation.transition_active &&
-            widget->animation.page == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
-            widget->animation.layer_roll_active = true;
-            widget->animation.layer_from = previous;
-            widget->animation.layer_to = state.index;
-            widget->animation.layer_frame = 0U;
-            widget->animation.layer_due = k_uptime_get() + LAYER_ROLL_FRAME_MS;
-            schedule_next_animation();
-        } else if (effective_page(widget) == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
-            /* Keep a dashboard being revealed current even if its layer changes mid-wipe. */
-            draw_layer_band(widget);
+        if (effective_page(widget) != TOUCAN_DISPLAY_PAGE_DASHBOARD) {
+            continue;
+        }
+
+        draw_layer_band(widget);
+        if (!widget->animation.transition_active) {
+            invalidate_rows(widget, LAYER_Y, LAYER_HEIGHT);
         }
     }
 }
