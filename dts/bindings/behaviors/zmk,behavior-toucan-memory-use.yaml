@@ -1,0 +1,5 @@
+description: Play or clear a Toucan memory slot
+
+compatible: "zmk,behavior-toucan-memory-use"
+
+include: one_param.yaml

@@ -13,7 +13,7 @@
         compatible = "zmk,conditional-layers";
 
         danger_layer {
-            if-layers = <TOUCAN_BT TOUCAN_SYS>;
+            if-layers = <TOUCAN_SYS TOUCAN_FN>;
             then-layer = <TOUCAN_DANGER>;
         };
     };
@@ -24,10 +24,10 @@
         base {
             display-name = "BASE";
             bindings = <
-                &kp ESC                   &any_layer_tap TOUCAN_NAV Q  &kp W                      &kp E                      &kp R    &kp T      &kp Y     &kp U     &kp I          &kp O   &any_layer_tap TOUCAN_NAV P      &kp BSLH
-                &left_mod_tap LCTRL EQUAL &left_layer_tap TOUCAN_SYM A &s_layer_tap TOUCAN_CLIP S &d_layer_tap TOUCAN_EDIT D &kp F    &kp G      &kp H     &kp J     &kp K          &kp L   &right_layer_tap TOUCAN_SYM SEMI &right_mod_tap RCTRL SQT
-                &kp MINUS                 &left_mod_tap LSHFT Z        &kp X                      &c_layer_tap TOUCAN_APP C  &kp V    &kp B      &kp N     &kp M     &kp COMMA      &kp DOT &right_mod_tap RSHFT FSLH        &kp UNDER
-                                                                                                  &mo TOUCAN_BT              &kp BSPC &kp TAB    &kp ENTER &kp SPACE &mo TOUCAN_SYS
+                &kp ESC                   &any_layer_tap TOUCAN_NAV Q  &kp W                      &kp E                      &kp R    &kp T      &kp Y     &kp U     &kp I         &kp O   &any_layer_tap TOUCAN_NAV P      &kp BSLH
+                &left_mod_tap LCTRL EQUAL &left_layer_tap TOUCAN_SYM A &s_layer_tap TOUCAN_CLIP S &d_layer_tap TOUCAN_EDIT D &kp F    &kp G      &kp H     &kp J     &kp K         &kp L   &right_layer_tap TOUCAN_SYM SEMI &right_mod_tap RCTRL SQT
+                &kp MINUS                 &left_mod_tap LSHFT Z        &kp X                      &c_layer_tap TOUCAN_APP C  &kp V    &kp B      &kp N     &kp M     &kp COMMA     &kp DOT &right_mod_tap RSHFT FSLH        &kp UNDER
+                                                                                                  &mo TOUCAN_SYS             &kp BSPC &kp TAB    &kp ENTER &kp SPACE &mo TOUCAN_FN
             >;
         };
 
@@ -84,25 +84,25 @@
         mouse {
             display-name = "MOU";
             bindings = <
-                &trans &trans &trans &trans    &trans    &trans       &trans    &trans    &trans    &trans &trans &trans
-                &trans &trans &trans &trans    &trans    &trans       &trans    &trans    &trans    &trans &trans &trans
-                &trans &trans &trans &trans    &trans    &trans       &trans    &trans    &trans    &trans &trans &trans
-                                     &mkp MCLK &mkp LCLK &mkp RCLK    &mkp LCLK &mkp RCLK &mkp MCLK
-            >;
-        };
-
-        bluetooth {
-            display-name = "BT";
-            bindings = <
-                &trans              &trans       &trans       &trans       &trans       &trans          &trans &trans &trans &trans &trans &trans
-                &bt_clear_guard 0 0 &bt BT_SEL 0 &bt BT_SEL 1 &bt BT_SEL 2 &bt BT_SEL 3 &bt BT_SEL 4    &trans &trans &trans &trans &trans &trans
-                &trans              &trans       &trans       &trans       &trans       &trans          &trans &trans &trans &trans &trans &trans
-                                                              &trans       &trans       &trans          &trans &trans &trans
+                &none &none &none &none            &none           &none        &none     &none     &none     &none &none &none
+                &none &none &none &msc MOVE_Y(-10) &msc MOVE_Y(10) &none        &none     &none     &none     &none &none &none
+                &none &none &none &none            &none           &none        &none     &none     &none     &none &none &none
+                                  &mkp MCLK        &mkp LCLK       &mkp RCLK    &mkp LCLK &mkp RCLK &mkp MCLK
             >;
         };
 
         system {
             display-name = "SYS";
+            bindings = <
+                &bt_clear_guard 0 0 &bt BT_SEL 0     &bt BT_SEL 1     &bt BT_SEL 2     &bt BT_SEL 3     &bt BT_SEL 4        &trans &trans &trans &trans &trans &trans
+                &memory_mode        &memory_slot 0 0 &memory_slot 1 1 &memory_slot 2 2 &memory_slot 3 3 &memory_slot 4 4    &trans &trans &trans &trans &trans &trans
+                &trans              &trans           &trans           &trans           &trans           &trans              &trans &trans &trans &trans &trans &trans
+                                                                      &trans           &trans           &trans              &trans &trans &trans
+            >;
+        };
+
+        fn {
+            display-name = "FN";
             bindings = <
                 &studio_unlock &trans   &kp F7 &kp F8 &kp F9 &kp F12    &kp C_VOL_DN &kp C_MUTE     &kp C_VOL_UP &trans &trans &trans
                 &trans         &trans   &kp F4 &kp F5 &kp F6 &kp F11    &trans       &trans         &trans       &trans &trans &trans
@@ -114,10 +114,10 @@
         danger {
             display-name = "DNG";
             bindings = <
-                &trans &bootloader &trans &trans &trans &trans    &trans &trans &trans &trans &bootloader &trans
-                &trans &sys_reset  &trans &trans &trans &trans    &trans &trans &trans &trans &sys_reset  &trans
-                &trans &trans      &trans &trans &trans &trans    &trans &trans &trans &trans &trans      &trans
-                                          &trans &trans &trans    &trans &trans &trans
+                &trans &toucan_bootloader &trans &trans &trans &trans    &trans &trans &trans &trans &toucan_bootloader &trans
+                &trans &sys_reset         &trans &trans &trans &trans    &trans &trans &trans &trans &sys_reset         &trans
+                &trans &trans             &trans &trans &trans &trans    &trans &trans &trans &trans &trans             &trans
+                                                 &trans &trans &trans    &trans &trans &trans
             >;
         };
     };

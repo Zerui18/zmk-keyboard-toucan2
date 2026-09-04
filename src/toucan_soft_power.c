@@ -6,6 +6,7 @@
  */
 
 #include <stdint.h>
+#include <string.h>
 
 #include <hal/nrf_gpio.h>
 #include <hal/nrf_power.h>
@@ -23,6 +24,9 @@
 #include <zmk/event_manager.h>
 #include <zmk/events/position_state_changed.h>
 #include <zmk/pm.h>
+
+#include "toucan_display_hooks.h"
+#include "toucan_soft_power.h"
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -63,7 +67,7 @@ static const struct gpio_dt_spec matrix_columns[] = {
 
 /* Physical positions in the stock 42-key layout. */
 #if IS_ENABLED(CONFIG_SHIELD_TOUCAN_LEFT)
-#define TOUCAN_POWER_FINAL_POSITION 36U /* outer BT layer thumb */
+#define TOUCAN_POWER_FINAL_POSITION 36U /* outer SYS layer thumb */
 #define TOUCAN_POWER_TARGET_MASK                                                               \
     (POSITION_BIT(13) | POSITION_BIT(26) | POSITION_BIT(15) | POSITION_BIT(28) |              \
      POSITION_BIT(TOUCAN_POWER_FINAL_POSITION)) /* A X D V + outer thumb */
@@ -71,7 +75,7 @@ static const struct gpio_dt_spec matrix_columns[] = {
     (MATRIX_BIT(1, 1) | MATRIX_BIT(2, 2) | MATRIX_BIT(1, 3) | MATRIX_BIT(2, 4) |               \
      MATRIX_BIT(3, 3))
 #elif IS_ENABLED(CONFIG_SHIELD_TOUCAN_RIGHT)
-#define TOUCAN_POWER_FINAL_POSITION 41U /* outer SYS layer thumb */
+#define TOUCAN_POWER_FINAL_POSITION 41U /* outer FN layer thumb */
 #define TOUCAN_POWER_TARGET_MASK                                                               \
     (POSITION_BIT(22) | POSITION_BIT(33) | POSITION_BIT(20) | POSITION_BIT(31) |              \
      POSITION_BIT(TOUCAN_POWER_FINAL_POSITION)) /* ; . K M + outer thumb */
@@ -84,6 +88,26 @@ static const struct gpio_dt_spec matrix_columns[] = {
 
 #define TOUCAN_POWER_FINAL_BIT POSITION_BIT(TOUCAN_POWER_FINAL_POSITION)
 #define TOUCAN_POWER_ENTRY_MASK (TOUCAN_POWER_TARGET_MASK & ~TOUCAN_POWER_FINAL_BIT)
+
+#if IS_ENABLED(CONFIG_SHIELD_TOUCAN_LEFT)
+static const uint8_t wake_positions[] = {13U, 26U, 15U, 28U, 36U};
+#else
+static const uint8_t wake_positions[] = {22U, 33U, 20U, 31U, 41U};
+#endif
+
+size_t toucan_soft_power_wake_positions(uint8_t *positions, size_t capacity) {
+    size_t count = MIN(capacity, ARRAY_SIZE(wake_positions));
+    if (positions != NULL && count > 0U) {
+        memcpy(positions, wake_positions, count);
+    }
+    return ARRAY_SIZE(wake_positions);
+}
+
+__weak uint32_t toucan_display_prepare_soft_off(void) {
+    return 0U;
+}
+
+__weak void toucan_display_cancel_soft_off(void) {}
 
 BUILD_ASSERT(CONFIG_TOUCAN_SOFT_POWER_WAKE_STABLE_MS <=
                  CONFIG_TOUCAN_SOFT_POWER_WAKE_VALIDATION_MS,
@@ -190,6 +214,7 @@ static void enter_soft_off(void) {
     clear_soft_power_marker();
     power_off_pending = false;
     restore_local_peripheral(peripheral_suspended);
+    toucan_display_cancel_soft_off();
     LOG_ERR("Unable to enter Toucan soft power off (%d)", err);
 }
 
@@ -428,7 +453,9 @@ static void schedule_power_off_if_released(void) {
 
     power_off_armed = false;
     power_off_pending = true;
-    k_work_reschedule(&power_off_work, K_MSEC(CONFIG_TOUCAN_SOFT_POWER_OFF_DELAY_MS));
+    uint32_t display_delay = toucan_display_prepare_soft_off();
+    uint32_t delay = MAX(display_delay, CONFIG_TOUCAN_SOFT_POWER_OFF_DELAY_MS);
+    k_work_reschedule(&power_off_work, K_MSEC(delay));
 }
 
 static int handle_entry_event(const struct zmk_position_state_changed *event, uint64_t key_bit,
@@ -584,6 +611,7 @@ static int position_state_changed_listener(const zmk_event_t *eh) {
         if (event->state) {
             k_work_cancel_delayable(&power_off_work);
             power_off_pending = false;
+            toucan_display_cancel_soft_off();
         }
 
         /* The pending shutdown was cancelled, so preserve the normal key pair. */

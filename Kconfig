@@ -81,6 +81,8 @@ DT_COMPAT_TOUCAN_BATTERY_ESTIMATOR := zmk,toucan-battery-estimator
 DT_COMPAT_TOUCAN_BATTERY_READOUT := zmk,behavior-toucan-battery-readout
 DT_COMPAT_TOUCAN_PLATFORM_TOGGLE := zmk,behavior-toucan-platform-toggle
 DT_COMPAT_TOUCAN_SPLIT_XY_PACKER := zmk,input-processor-toucan-split-xy-packer
+DT_COMPAT_TOUCAN_MEMORY_SET := zmk,behavior-toucan-memory-set
+DT_COMPAT_TOUCAN_BOOTLOADER := zmk,behavior-toucan-bootloader
 
 config TOUCAN_PLATFORM_MODE
     bool "Toucan persistent macOS/Windows shortcut mode"
@@ -93,12 +95,33 @@ config TOUCAN_PLATFORM_MODE
       layer key is released. Dedicated Control bindings remain unchanged. The
       selected mode persists across resets.
 
+config TOUCAN_MEMORY
+    bool "Toucan five-slot macro memory"
+    default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_MEMORY_SET))
+    depends on SETTINGS
+    depends on !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
+    help
+      Provide five persistent arbitrary-key-sequence/text slots. Tapping a
+      slot plays it, holding it begins capture, and holding the memory-clear
+      key while tapping a slot clears it. During capture, resolved key events
+      are kept private instead of being sent to the active HID endpoint.
+
+config TOUCAN_BOOTLOADER
+    bool "Toucan display-aware UF2 bootloader entry"
+    default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_BOOTLOADER))
+    depends on SOC_NRF52840 && NRF_STORE_REBOOT_TYPE_GPREGRET
+    help
+      Provide a side-local UF2 behavior and request API. The left half shows
+      the UF2 page before rebooting; the screenless right half enters UF2
+      without an added delay.
+
 config TOUCAN_USB_BOOTLOADER_TOUCH
     bool "Toucan guarded USB bootloader trigger"
     default y if SHIELD_TOUCAN_LEFT || SHIELD_TOUCAN_RIGHT
     depends on SOC_NRF52840
     depends on USB_CDC_ACM && UART_LINE_CTRL
     depends on NRF_STORE_REBOOT_TYPE_GPREGRET
+    depends on TOUCAN_BOOTLOADER
     help
       Enter the XIAO UF2 bootloader only after the host performs DTR on/off at
       1200 baud and then DTR on/off at 2400 baud within two seconds. This is

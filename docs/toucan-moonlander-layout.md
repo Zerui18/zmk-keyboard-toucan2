@@ -3,7 +3,7 @@
 This is the current Toucan port of the useful middle three Moonlander rows and
 four inner thumb keys. The Moonlander's top and extra rows, innermost columns,
 and unreachable innermost thumb keys are omitted. Toucan's two outer thumb
-keys provide the new Bluetooth and system layers.
+keys provide the new system and function layers.
 
 The physical order in every diagram is left half, then right half. `___` means
 transparent: the binding from the next active layer below is used. Layer
@@ -19,7 +19,7 @@ Esc        Q/NAV    W       E       R       T       | Y       U       I       O 
 Equal/Ctrl A/SYM    S/CLIP  D/EDIT  F       G       | H       J       K       L       Semicolon/SYM Quote/Ctrl
 Minus      Z/Shift  X       C/APP   V       B       | N       M       Comma   Dot     Slash/Shift  Underscore
 
-                                 BT  Backspace  Tab | Enter  Space  SYS
+                                SYS  Backspace  Tab | Enter  Space  FN
 ```
 
 The thumb row is shown from the outside of the left half to the outside of the
@@ -39,12 +39,12 @@ The display uses the short names shown below.
 | 3 | `CLIP` | `CLP` | Hold S, then use D/F | Copy, cut, and paste |
 | 4 | `EDIT` | `EDT` | Hold D, then use S/F | Undo and redo |
 | 5 | `APP` | `APP` | Hold C, then use X/V | Cycle backward/forward through applications |
-| 6 | `MOUSE` | `MOU` | Touch the trackpad | Mouse buttons on the thumb row |
-| 7 | `BT` | `BT` | Hold outer-left thumb | Bluetooth profiles and guarded clear |
-| 8 | `SYS` | `SYS` | Hold outer-right thumb | Diagnostics, F-keys, media, and platform mode |
+| 6 | `MOUSE` | `MOU` | Touch the trackpad | Opaque pointer controls, D/F scroll, and thumb buttons |
+| 7 | `SYS` | `SYS` | Hold outer-left thumb | Bluetooth profiles and five persistent memory slots |
+| 8 | `FN` | `FN` | Hold outer-right thumb | Diagnostics, F-keys, media, and platform mode |
 | 9 | `DANGER` | `DNG` | Hold both outer thumbs | Side-local bootloader and reset |
 
-`DANGER` is a conditional layer: it exists only while `BT` and `SYS` are both
+`DANGER` is a conditional layer: it exists only while `SYS` and `FN` are both
 active. Higher numbered active layers have normal ZMK priority.
 
 ## Hold-tap resolution
@@ -145,15 +145,15 @@ They are active on BASE, NAV, CLIP, EDIT, and APP. The J/K/L positions have the
 separate period/comma meanings described above on SYM. The old password combo
 is deliberately not stored in this repository.
 
-## Bluetooth layer (`BT`)
+## System layer (`SYS`)
 
-Hold the outer-left thumb. All controls occupy one left-hand home-row run,
-starting with guarded clear and then profiles 1 through 5 from left to right:
+Hold the outer-left thumb. Bluetooth occupies the left top row; persistent
+memory occupies the left home row:
 
 ```text
-___     ___  ___  ___  ___  ___ | ___  ___  ___  ___  ___  ___
-BT_CLR  BT1  BT2  BT3  BT4  BT5 | ___  ___  ___  ___  ___  ___
-___     ___  ___  ___  ___  ___ | ___  ___  ___  ___  ___  ___
+BT_CLR   BT1   BT2   BT3   BT4   BT5 | ___  ___  ___  ___  ___  ___
+MEM_CLR  MEM1  MEM2  MEM3  MEM4  MEM5 | ___  ___  ___  ___  ___  ___
+___      ___   ___   ___   ___   ___ | ___  ___  ___  ___  ___  ___
 
                          ___  ___  ___ | ___  ___  ___
 ```
@@ -162,7 +162,29 @@ BT1-BT5 select ZMK profiles 0-4. Tapping BT_CLR is inert. Hold BT_CLR for two
 seconds to clear only the currently selected profile; it does not clear every
 bond. The display's five profile slots use the user-facing labels 1-5.
 
-## System layer (`SYS`)
+For a memory slot:
+
+- Tap MEM1–MEM5 to replay it.
+- Hold a slot for 400 ms to replace it and enter capture in SEQ mode. Release
+  SYS after capture starts; the ordinary keymap, hold-taps, layers, macros, and
+  combos continue to resolve, but their resulting key events are captured and
+  never sent to the host.
+- Hold MEM_CLR and tap a slot to erase only that slot.
+
+SEQ stores an arbitrary resolved press/release stream, including chords,
+modifiers, Enter, and Escape. TEXT stores literal text up to 64 characters.
+While capture is active, the physical SYS thumb becomes the control key:
+
+- Single-tap SYS to switch SEQ/TEXT, but only while the capture is empty.
+- Double-tap SYS to cancel (start the second tap within 275 ms). Escape remains
+  available to a SEQ and is not a cancellation key.
+- Hold SYS for 600 ms to save a non-empty capture.
+
+Slots and their `sequence`/`text` type survive resets in Zephyr settings. Slot
+contents are shown only on the MEM SET capture page; the dashboard exposes only
+occupancy, with a small prime mark distinguishing sequence slots.
+
+## Function layer (`FN`)
 
 Hold the outer-right thumb:
 
@@ -208,7 +230,21 @@ bootloader or resetting it does not intentionally reset the other half.
 ## Trackpad and mouse layer (`MOU`)
 
 Touching the right trackpad automatically holds MOUSE and makes the left display
-show `MOU`. All alpha positions are transparent. The thumb row becomes:
+show `MOU`. Every unused key is `&none`, so MOU is opaque and no BASE binding
+falls through while it is active. Its assigned alpha keys are:
+
+```text
+D  Scroll up
+F  Scroll down
+```
+
+These use HID Resolution Multipliers and a 10-unit/second velocity. At the
+host's maximum 16x wheel resolution, this is approximately 0.625 wheel notches
+per second. Because the HID descriptor changes, previously bonded Bluetooth
+hosts must be cleared and paired again after first flashing this version. For
+USB, disconnect and reconnect the cable once so the host reloads the descriptor.
+
+The thumb row becomes:
 
 ```text
                          Middle  Left  Right | Left  Right  Middle
@@ -225,8 +261,8 @@ Each half enters and wakes from System OFF independently. Its exact five-key
 pattern is:
 
 ```text
-left:   A + X + D + V + outer-left BT thumb
-right:  semicolon + dot + K + M + outer-right SYS thumb
+left:   A + X + D + V + outer-left SYS thumb
+right:  semicolon + dot + K + M + outer-right FN thumb
 ```
 
 To shut down one half:
@@ -237,13 +273,14 @@ To shut down one half:
 3. Within the 1.5-second capture window, press the four character keys. All
    four presses must fit inside a 120 ms window, with no extra key and no early
    release.
-4. Release all five keys. The half enters System OFF after a 25 ms settling
-   interval.
+4. Release all five keys. The left first reveals its retained OFF page, then
+   the half enters System OFF; the right has no display and powers down after
+   its normal settling interval.
 
 The four captured character presses are consumed and are not typed into the
-host application. Before System OFF, the left half requests display blanking
-and the right half puts the trackpad to sleep; normal BLE and keyboard activity
-then stop.
+host application. The right half puts the trackpad to sleep; normal BLE and
+keyboard activity then stop. The Sharp memory LCD retains the left OFF page
+without refresh traffic while the MCU is off.
 
 For a reliable wake, hold the four character keys first, press the same outer
 thumb last, and keep the exact five-key pattern held. Early boot accepts it when

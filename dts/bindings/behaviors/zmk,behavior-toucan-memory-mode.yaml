@@ -1,0 +1,5 @@
+description: Toucan memory clear modifier
+
+compatible: "zmk,behavior-toucan-memory-mode"
+
+include: zero_param.yaml

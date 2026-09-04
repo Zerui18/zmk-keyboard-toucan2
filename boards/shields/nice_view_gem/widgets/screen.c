@@ -1,5 +1,5 @@
 /*
- * Toucan2 144x168 static dashboard.
+ * Toucan2 144x168 event-driven dashboard and retained-image pages.
  *
  * The framebuffer is updated directly so LVGL can invalidate only the rows
  * belonging to a changed band. The Sharp memory LCD still transmits full-width
@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -38,8 +39,10 @@
 #include <zmk/usb.h>
 
 #include "screen.h"
-#include "sleep.h"
+#include "toucan_display_hooks.h"
+#include "toucan_memory.h"
 #include "toucan_platform_mode.h"
+#include "toucan_soft_power.h"
 #include "toucan_split_status.h"
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -55,18 +58,43 @@ enum dashboard_band {
     DASHBOARD_BAND_SYSTEM = BIT(4),
 };
 
-/* The reference puts the power bolts at y=2, one row above the nominal band. */
-#define POWER_DIRTY_Y 2
+/* The v2 reference has an 8 px top/side inset; bolts begin one row above PWR. */
+#define CANVAS_PADDING 8
+#define POWER_DIRTY_Y 7
 #define POWER_DIRTY_HEIGHT 29
-#define POWER_CONTENT_Y 3
-#define LAYER_Y 44
+#define POWER_CONTENT_Y 8
+#define LAYER_Y 48
 #define LAYER_HEIGHT 22
-#define BT_Y 79
+#define BT_Y 82
 #define BT_HEIGHT 20
-#define MEMORY_Y 112
+#define MEMORY_Y 114
 #define MEMORY_HEIGHT 20
-#define SYSTEM_Y 145
+#define SYSTEM_Y 146
 #define SYSTEM_HEIGHT 16
+
+#define PAGE_TRANSITION_FRAMES 7
+#define PAGE_TRANSITION_FRAME_MS 83
+#define PAGE_TRANSITION_TOTAL_MS (PAGE_TRANSITION_FRAMES * PAGE_TRANSITION_FRAME_MS)
+#define PAGE_TRANSITION_GUARD_MS 50
+#define BOOT_HOLD_MS 450
+#define LAYER_ROLL_FRAMES 4
+#define LAYER_ROLL_FRAME_MS 83
+#define PAIRING_BLINK_MS 500
+#define LOW_BATTERY_BLINK_MS 1000
+#define LOW_BATTERY_PERCENT 15
+#define BOLT_BLINK_FRAMES 6
+#define BOLT_BLINK_FRAME_MS 250
+#define MEMORY_FLASH_FRAMES 4
+#define MEMORY_FLASH_FRAME_MS 150
+#define CARET_BLINK_MS 530
+
+#ifndef TOUCAN_FIRMWARE_VERSION
+#define TOUCAN_FIRMWARE_VERSION "0.3"
+#endif
+
+#ifndef TOUCAN_GIT_SHA
+#define TOUCAN_GIT_SHA "UNKNOWN"
+#endif
 
 struct bitmap_glyph {
     char code;
@@ -115,6 +143,13 @@ static const struct bitmap_glyph status_glyphs[] = {
     {'Z', 5, 6, "XXXXX" "....X" "...X." "..X.." ".X..." "XXXXX"},
     {'!', 1, 6, "X" "X" "X" "X" "." "X"},
     {'?', 4, 6, "XXX." "...X" "..X." "..X." "...." "..X."},
+    {'+', 5, 6, "..X.." "..X.." "XXXXX" "..X.." "..X.." "....."},
+    {'%', 5, 6, "XX..X" "XX.X." "..X.." ".X..." "X.XX." "X..XX"},
+    {'-', 4, 6, "...." "...." "XXXX" "...." "...." "...."},
+    {'.', 1, 6, "." "." "." "." "." "X"},
+    {'/', 5, 6, "....X" "...X." "..X.." ".X..." "X...." "....."},
+    {':', 1, 6, "." "X" "." "." "X" "."},
+    {'*', 2, 6, ".." "XX" "XX" ".." ".." ".."},
 };
 
 /* 4x5 LAYER font from the display handoff, plus digits for fallback L<n>. */
@@ -134,6 +169,7 @@ static const struct bitmap_glyph layer_glyphs[] = {
     {'C', 4, 5, ".XXX" "X..." "X..." "X..." ".XXX"},
     {'D', 4, 5, "XXX." "X..X" "X..X" "X..X" "XXX."},
     {'E', 4, 5, "XXXX" "X..." "XXX." "X..." "XXXX"},
+    {'F', 4, 5, "XXXX" "X..." "XXX." "X..." "X..."},
     {'G', 4, 5, ".XXX" "X..." "X.XX" "X..X" ".XXX"},
     {'L', 4, 5, "X..." "X..." "X..." "X..." "XXXX"},
     {'M', 5, 5, "X...X" "XX.XX" "X.X.X" "X...X" "X...X"},
@@ -158,6 +194,54 @@ static const struct bitmap_glyph cross_icon = {
     .width = 5,
     .height = 5,
     .pixels = "X...X" ".X.X." "..X.." ".X.X." "X...X",
+};
+
+static const struct bitmap_glyph modifier_icons[] = {
+    {'G', 8, 8,
+     ".X....X."
+     "X.X..X.X"
+     "X.XXXX.X"
+     ".XX..XX."
+     ".XX..XX."
+     "X.XXXX.X"
+     "X.X..X.X"
+     ".X....X."},
+    {'S', 8, 8,
+     "...XX..."
+     "..XXXX.."
+     ".XXXXXX."
+     "XXXXXXXX"
+     "..XXXX.."
+     "..XXXX.."
+     "..XXXX.."
+     "........"},
+    {'C', 8, 8,
+     "........"
+     "...XX..."
+     "..XXXX.."
+     ".XX..XX."
+     "XX....XX"
+     "........"
+     "........"
+     "........"},
+    {'A', 8, 8,
+     "XXX...XX"
+     "..XX...."
+     "...XX..."
+     "....XX.."
+     ".....XXX"
+     "........"
+     "........"
+     "........"},
+    {'W', 8, 8,
+     "XXX.XXXX"
+     "XXX.XXXX"
+     "XXX.XXXX"
+     "........"
+     "XXX.XXXX"
+     "XXX.XXXX"
+     "XXX.XXXX"
+     "........"},
 };
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
@@ -204,6 +288,35 @@ static void dither_rect(struct zmk_widget_screen *widget, int x, int y, int widt
     }
 }
 
+static void draw_disc(struct zmk_widget_screen *widget, int center_x, int center_y, int radius,
+                      bool ink) {
+    int threshold = radius * radius + radius;
+
+    for (int y = -radius; y <= radius; y++) {
+        for (int x = -radius; x <= radius; x++) {
+            if (x * x + y * y <= threshold) {
+                set_pixel(widget, center_x + x, center_y + y, ink);
+            }
+        }
+    }
+}
+
+static void draw_ring(struct zmk_widget_screen *widget, int center_x, int center_y, int radius,
+                      int thickness) {
+    int inner = radius - thickness;
+    int outer_threshold = radius * radius + radius;
+    int inner_threshold = inner * inner + inner;
+
+    for (int y = -radius; y <= radius; y++) {
+        for (int x = -radius; x <= radius; x++) {
+            int distance = x * x + y * y;
+            if (distance <= outer_threshold && distance > inner_threshold) {
+                set_pixel(widget, center_x + x, center_y + y, true);
+            }
+        }
+    }
+}
+
 static void clear_rows(struct zmk_widget_screen *widget, int y, int height) {
     fill_rect(widget, 0, y, SCREEN_WIDTH, height, false);
 }
@@ -214,6 +327,10 @@ static void clear_framebuffer(struct zmk_widget_screen *widget) {
 
 static const struct bitmap_glyph *find_glyph(const struct bitmap_glyph *glyphs,
                                               size_t glyph_count, char code) {
+    if (code >= 'a' && code <= 'z') {
+        code = (char)(code - 'a' + 'A');
+    }
+
     for (size_t i = 0; i < glyph_count; i++) {
         if (glyphs[i].code == code) {
             return &glyphs[i];
@@ -235,6 +352,26 @@ static void draw_bitmap(struct zmk_widget_screen *widget, int x, int y,
         for (int col = 0; col < glyph->width; col++) {
             if (glyph->pixels[row * glyph->width + col] == 'X') {
                 fill_rect(widget, x + col * scale, y + row * scale, scale, scale, true);
+            }
+        }
+    }
+}
+
+static void draw_bitmap_clipped(struct zmk_widget_screen *widget, int x, int y,
+                                const struct bitmap_glyph *glyph, int scale, int clip_y0,
+                                int clip_y1) {
+    for (int row = 0; row < glyph->height; row++) {
+        for (int col = 0; col < glyph->width; col++) {
+            if (glyph->pixels[row * glyph->width + col] != 'X') {
+                continue;
+            }
+
+            for (int py = 0; py < scale; py++) {
+                int target_y = y + row * scale + py;
+                if (target_y < clip_y0 || target_y > clip_y1) {
+                    continue;
+                }
+                fill_rect(widget, x + col * scale, target_y, scale, 1, true);
             }
         }
     }
@@ -279,6 +416,27 @@ static int draw_text(struct zmk_widget_screen *widget, int x, int y, const char 
     return MAX(0, cursor_x - x - scale);
 }
 
+static int draw_text_clipped(struct zmk_widget_screen *widget, int x, int y, const char *text,
+                             int scale, const struct bitmap_glyph *glyphs, size_t glyph_count,
+                             int clip_y0, int clip_y1) {
+    int cursor_x = x;
+
+    for (const char *cursor = text; *cursor != '\0'; cursor++) {
+        if (*cursor == ' ') {
+            cursor_x += 3 * scale;
+            continue;
+        }
+
+        const struct bitmap_glyph *glyph = find_glyph(glyphs, glyph_count, *cursor);
+        if (glyph != NULL) {
+            draw_bitmap_clipped(widget, cursor_x, y, glyph, scale, clip_y0, clip_y1);
+            cursor_x += (glyph->width + 1) * scale;
+        }
+    }
+
+    return MAX(0, cursor_x - x - scale);
+}
+
 #define STATUS_TEXT_WIDTH(text, scale)                                                         \
     text_width((text), (scale), status_glyphs, ARRAY_SIZE(status_glyphs))
 #define DRAW_STATUS_TEXT(widget, x, y, text, scale)                                            \
@@ -296,16 +454,22 @@ static void draw_signal_bars(struct zmk_widget_screen *widget, int x, int y) {
 
 static void draw_battery_bar(struct zmk_widget_screen *widget, int x, uint8_t percentage,
                              bool connected) {
-    outline_rect(widget, x, 18, 62, 12);
+    outline_rect(widget, x, 23, 60, 12);
 
     if (!connected) {
-        dither_rect(widget, x + 2, 20, 58, 8);
+        dither_rect(widget, x + 2, 25, 56, 8);
         return;
     }
 
-    int fill_width = (MIN(percentage, 100U) * 58U + 50U) / 100U;
+    bool low = percentage <= LOW_BATTERY_PERCENT;
+    if (low && widget->animation.low_battery_blink_active &&
+        !widget->animation.low_battery_fill_visible) {
+        return;
+    }
+
+    int fill_width = (MIN(percentage, 100U) * 56U + 50U) / 100U;
     if (fill_width > 0) {
-        fill_rect(widget, x + 2, 20, fill_width, 8, true);
+        fill_rect(widget, x + 2, 25, fill_width, 8, true);
     }
 }
 
@@ -329,16 +493,16 @@ static void draw_power_band(struct zmk_widget_screen *widget) {
         }
     }
 
-    int host_width = DRAW_STATUS_TEXT(widget, 4, POWER_CONTENT_Y, host_label, 2);
-    if (state->usb_powered) {
-        draw_bitmap(widget, 4 + host_width + 6, 2, &bolt_icon, 2);
+    int host_width = DRAW_STATUS_TEXT(widget, CANVAS_PADDING, POWER_CONTENT_Y, host_label, 2);
+    if (state->usb_powered && widget->animation.local_bolt_visible) {
+        draw_bitmap(widget, CANVAS_PADDING + host_width + 6, 7, &bolt_icon, 2);
     }
-    draw_battery_bar(widget, 4, state->battery_left, true);
+    draw_battery_bar(widget, CANVAS_PADDING, state->battery_left, true);
 
     if (state->right_connected) {
         draw_signal_bars(widget, 76, POWER_CONTENT_Y);
-        if (state->right_usb_powered) {
-            draw_bitmap(widget, 93, 2, &bolt_icon, 2);
+        if (state->right_usb_powered && widget->animation.right_bolt_visible) {
+            draw_bitmap(widget, 93, 7, &bolt_icon, 2);
         }
     } else {
         draw_bitmap(widget, 76, POWER_CONTENT_Y, &cross_icon, 2);
@@ -349,7 +513,7 @@ static void draw_power_band(struct zmk_widget_screen *widget) {
 
 static const char *layer_name(uint8_t layer_index, char *fallback, size_t fallback_size) {
     static const char *const names[] = {
-        "BASE", "SYM", "NAV", "CLP", "EDT", "APP", "MOU", "BT", "SYS", "DNG",
+        "BASE", "SYM", "NAV", "CLP", "EDT", "APP", "MOU", "SYS", "FN", "DNG",
     };
 
     if (layer_index < ARRAY_SIZE(names)) {
@@ -379,24 +543,24 @@ static void draw_dotted_underline(struct zmk_widget_screen *widget, int x, int y
 
 static void draw_bt_band(struct zmk_widget_screen *widget) {
     clear_rows(widget, BT_Y, BT_HEIGHT);
-    DRAW_STATUS_TEXT(widget, 4, 81, "BT", 2);
+    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 84, "BT", 2);
 
     for (int i = 0; i < TOUCAN_BT_PROFILE_COUNT; i++) {
-        int slot_x = 42 + i * 20;
+        int slot_x = 38 + i * 20;
 
         if (widget->state.profiles_bonded[i]) {
             char digit[] = {(char)('1' + i), '\0'};
-            DRAW_STATUS_TEXT(widget, slot_x + 4, 81, digit, 2);
+            DRAW_STATUS_TEXT(widget, slot_x + 4, 84, digit, 2);
         } else {
-            fill_rect(widget, slot_x + 8, 86, 2, 2, true);
+            fill_rect(widget, slot_x + 8, 89, 2, 2, true);
         }
 
         if (i == widget->state.active_profile_index) {
             if (widget->state.active_profile_connected &&
                 widget->state.profiles_bonded[i]) {
-                fill_rect(widget, slot_x + 2, 95, 14, 3, true);
-            } else {
-                draw_dotted_underline(widget, slot_x + 2, 95, 14);
+                fill_rect(widget, slot_x + 2, 98, 14, 3, true);
+            } else if (widget->animation.pairing_marker_visible) {
+                draw_dotted_underline(widget, slot_x + 2, 98, 14);
             }
         }
     }
@@ -404,16 +568,43 @@ static void draw_bt_band(struct zmk_widget_screen *widget) {
 
 static void draw_memory_band(struct zmk_widget_screen *widget) {
     clear_rows(widget, MEMORY_Y, MEMORY_HEIGHT);
-    DRAW_STATUS_TEXT(widget, 4, 114, "MEM", 2);
+    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 116, "ME", 2);
 
     for (int i = 0; i < TOUCAN_MEMORY_SLOT_COUNT; i++) {
-        int slot_x = 42 + i * 20;
+        int slot_x = 38 + i * 20;
+        uint8_t type = widget->state.memory.slot_types[i];
+        bool inverted = widget->animation.memory_flash_active &&
+                        widget->animation.memory_flash_inverted &&
+                        widget->animation.memory_flash_slot == i;
 
-        if (widget->state.memory_slots_set[i]) {
+        if (inverted) {
+            fill_rect(widget, slot_x, MEMORY_Y, 14, 16, true);
+        }
+
+        if (type != TOUCAN_MEMORY_SLOT_EMPTY) {
             char digit[] = {(char)('1' + i), '\0'};
-            DRAW_STATUS_TEXT(widget, slot_x + 4, 114, digit, 2);
-        } else {
-            fill_rect(widget, slot_x + 8, 119, 2, 2, true);
+            if (inverted) {
+                const struct bitmap_glyph *glyph = find_glyph(status_glyphs,
+                                                               ARRAY_SIZE(status_glyphs), digit[0]);
+                if (glyph != NULL) {
+                    for (int row = 0; row < glyph->height; row++) {
+                        for (int col = 0; col < glyph->width; col++) {
+                            if (glyph->pixels[row * glyph->width + col] == 'X') {
+                                fill_rect(widget, slot_x + 4 + col * 2, 116 + row * 2, 2, 2,
+                                          false);
+                            }
+                        }
+                    }
+                }
+            } else {
+                DRAW_STATUS_TEXT(widget, slot_x + 4, 116, digit, 2);
+            }
+
+            if (type == TOUCAN_MEMORY_SLOT_SEQUENCE && !inverted) {
+                fill_rect(widget, slot_x + 15, 115, 2, 4, true);
+            }
+        } else if (!inverted) {
+            fill_rect(widget, slot_x + 8, 121, 2, 2, true);
         }
     }
 }
@@ -422,15 +613,19 @@ static void draw_system_band(struct zmk_widget_screen *widget) {
     clear_rows(widget, SYSTEM_Y, SYSTEM_HEIGHT);
 
     if (widget->state.caps_lock) {
-        DRAW_STATUS_TEXT(widget, 3, 147, "CAPS", 2);
+        DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 148, "CAPS", 2);
     }
 
     const char *platform = widget->state.windows_mode ? "WIN" : "MAC";
     int width = STATUS_TEXT_WIDTH(platform, 2);
-    DRAW_STATUS_TEXT(widget, 141 - width, 147, platform, 2);
+    DRAW_STATUS_TEXT(widget, 136 - width, 148, platform, 2);
 }
 
 static void invalidate_rows(struct zmk_widget_screen *widget, int y, int height) {
+    if (height <= 0) {
+        return;
+    }
+
     lv_area_t object_area;
     lv_obj_get_coords(widget->obj, &object_area);
 
@@ -443,8 +638,13 @@ static void invalidate_rows(struct zmk_widget_screen *widget, int y, int height)
     lv_obj_invalidate_area(widget->obj, &dirty_area);
 }
 
+static enum toucan_display_page effective_page(const struct zmk_widget_screen *widget) {
+    return widget->animation.transition_active ? widget->animation.transition_target
+                                               : widget->animation.page;
+}
+
 static void render_bands(struct zmk_widget_screen *widget, uint8_t bands) {
-    if (!widget->ready || is_sleep_screen_active()) {
+    if (!widget->ready || effective_page(widget) != TOUCAN_DISPLAY_PAGE_DASHBOARD) {
         return;
     }
 
@@ -470,18 +670,736 @@ static void render_bands(struct zmk_widget_screen *widget, uint8_t bands) {
     }
 }
 
-static void render_full_dashboard(struct zmk_widget_screen *widget) {
-    if (!widget->ready || is_sleep_screen_active()) {
+static void format_host_label(const struct toucan_display_state *state, char *label,
+                              size_t label_size) {
+    if (state->selected_usb) {
+        snprintf(label, label_size, "USB%s", state->usb_hid_ready ? "" : "!");
         return;
     }
 
+    uint8_t profile = MIN(state->active_profile_index, TOUCAN_BT_PROFILE_COUNT - 1);
+    bool bonded = state->profiles_bonded[profile];
+    char suffix = state->active_profile_connected && bonded ? '\0' : (bonded ? '!' : '?');
+
+    if (suffix == '\0') {
+        snprintf(label, label_size, "BT%u", profile + 1U);
+    } else {
+        snprintf(label, label_size, "BT%u%c", profile + 1U, suffix);
+    }
+}
+
+static void draw_sleep_battery_bar(struct zmk_widget_screen *widget, int x, uint8_t percentage,
+                                   bool connected) {
+    outline_rect(widget, x, 146, 60, 10);
+    if (!connected) {
+        dither_rect(widget, x + 2, 148, 56, 6);
+        return;
+    }
+
+    int fill_width = (MIN(percentage, 100U) * 56U + 50U) / 100U;
+    if (fill_width > 0) {
+        fill_rect(widget, x + 2, 148, fill_width, 6, true);
+    }
+}
+
+static void draw_sleep_page(struct zmk_widget_screen *widget) {
+    char host_label[6];
+
+    draw_disc(widget, 72, 52, 24, true);
+    draw_disc(widget, 81, 45, 21, false);
+
+    int width = LAYER_TEXT_WIDTH("SLEEP", 3);
+    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 96, "SLEEP", 3);
+
+    format_host_label(&widget->state, host_label, sizeof(host_label));
+    width = STATUS_TEXT_WIDTH(host_label, 2);
+    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 122, host_label, 2);
+    draw_sleep_battery_bar(widget, CANVAS_PADDING, widget->state.battery_left, true);
+    draw_sleep_battery_bar(widget, 76, widget->state.battery_right,
+                           widget->state.right_connected);
+}
+
+static bool wake_position_is_set(uint8_t position, const uint8_t *positions, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (positions[i] == position) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void draw_wake_key(struct zmk_widget_screen *widget, int x, int y, bool active) {
+    if (active) {
+        fill_rect(widget, x, y, 5, 5, true);
+    } else {
+        fill_rect(widget, x + 2, y + 2, 2, 2, true);
+    }
+}
+
+static void draw_soft_off_page(struct zmk_widget_screen *widget) {
+    draw_ring(widget, 72, 38, 17, 4);
+    fill_rect(widget, 66, 19, 13, 10, false);
+    fill_rect(widget, 70, 22, 4, 14, true);
+
+    int width = LAYER_TEXT_WIDTH("OFF", 3);
+    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 68, "OFF", 3);
+    width = STATUS_TEXT_WIDTH("WAKE KEYS", 2);
+    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 94, "WAKE KEYS", 2);
+
+    uint8_t positions[8];
+    size_t count = toucan_soft_power_wake_positions(positions, ARRAY_SIZE(positions));
+    count = MIN(count, ARRAY_SIZE(positions));
+    const int origin_x = 47;
+    const int origin_y = 114;
+    const int pitch = 9;
+
+    for (uint8_t row = 0U; row < 3U; row++) {
+        for (uint8_t column = 0U; column < 6U; column++) {
+            uint8_t position = row * 12U + column;
+            draw_wake_key(widget, origin_x + column * pitch, origin_y + row * pitch,
+                          wake_position_is_set(position, positions, count));
+        }
+    }
+
+    for (uint8_t thumb = 0U; thumb < 3U; thumb++) {
+        uint8_t position = 36U + thumb;
+        draw_wake_key(widget, origin_x + (3 + thumb) * pitch, origin_y + 3 * pitch,
+                      wake_position_is_set(position, positions, count));
+    }
+}
+
+static void draw_uf2_page(struct zmk_widget_screen *widget) {
+    fill_rect(widget, 70, 26, 4, 14, true);
+    for (int row = 0; row < 8; row++) {
+        horizontal_line(widget, 64 + row, 40 + row, 16 - 2 * row, true);
+    }
+    fill_rect(widget, 60, 52, 24, 3, true);
+
+    int width = LAYER_TEXT_WIDTH("UF2", 4);
+    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 66, "UF2", 4);
+    width = STATUS_TEXT_WIDTH("COPY .UF2", 2);
+    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 98, "COPY .UF2", 2);
+}
+
+static void draw_boot_page(struct zmk_widget_screen *widget) {
+    int width = LAYER_TEXT_WIDTH("TOUCAN", 3);
+    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 60, "TOUCAN", 3);
+
+    char version[32];
+    snprintf(version, sizeof(version), "ZMK %s * %s", TOUCAN_FIRMWARE_VERSION,
+             TOUCAN_GIT_SHA);
+    width = STATUS_TEXT_WIDTH(version, 1);
+    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 94, version, 1);
+}
+
+struct content_cursor {
+    int x;
+    int y;
+    bool clipped;
+};
+
+static size_t limited_text_length(const char *text, size_t capacity) {
+    size_t length = 0U;
+    while (length < capacity && text[length] != '\0') {
+        length++;
+    }
+    return length;
+}
+
+static bool content_wrap(struct content_cursor *cursor, int width) {
+    if (cursor->x + width > SCREEN_WIDTH - CANVAS_PADDING) {
+        cursor->x = CANVAS_PADDING;
+        cursor->y += 18;
+    }
+    if (cursor->y > 146) {
+        cursor->clipped = true;
+    }
+    return !cursor->clipped;
+}
+
+static void draw_content_text(struct zmk_widget_screen *widget, struct content_cursor *cursor,
+                              const char *text) {
+    for (const char *character = text; *character != '\0' && !cursor->clipped; character++) {
+        if (*character == '\n') {
+            cursor->x = CANVAS_PADDING;
+            cursor->y += 18;
+            cursor->clipped = cursor->y > 146;
+            continue;
+        }
+        if (*character == '\t') {
+            for (int i = 0; i < 4; i++) {
+                draw_content_text(widget, cursor, " ");
+            }
+            continue;
+        }
+
+        char glyph_text[] = {*character, '\0'};
+        int width = STATUS_TEXT_WIDTH(glyph_text, 2) + 2;
+        if (!content_wrap(cursor, width)) {
+            break;
+        }
+        cursor->x += DRAW_STATUS_TEXT(widget, cursor->x, cursor->y, glyph_text, 2) + 2;
+    }
+}
+
+static void draw_modifier_icon(struct zmk_widget_screen *widget, struct content_cursor *cursor,
+                               int icon_index) {
+    if (!content_wrap(cursor, 18)) {
+        return;
+    }
+    draw_bitmap(widget, cursor->x, cursor->y - 2, &modifier_icons[icon_index], 2);
+    cursor->x += 22;
+}
+
+static void draw_implicit_modifier_icons(struct zmk_widget_screen *widget,
+                                         struct content_cursor *cursor, uint8_t modifiers) {
+    if ((modifiers & (MOD_LGUI | MOD_RGUI)) != 0U) {
+        draw_modifier_icon(widget, cursor, widget->state.windows_mode ? 4 : 0);
+    }
+    if ((modifiers & (MOD_LCTL | MOD_RCTL)) != 0U) {
+        draw_modifier_icon(widget, cursor, 2);
+    }
+    if ((modifiers & (MOD_LALT | MOD_RALT)) != 0U) {
+        draw_modifier_icon(widget, cursor, 3);
+    }
+    if ((modifiers & (MOD_LSFT | MOD_RSFT)) != 0U) {
+        draw_modifier_icon(widget, cursor, 1);
+    }
+}
+
+static bool sequence_key_label(const struct toucan_memory_sequence_action *action, char *label,
+                               size_t label_size) {
+    if (action->usage_page != HID_USAGE_KEY) {
+        snprintf(label, label_size, "?");
+        return true;
+    }
+
+    uint16_t keycode = action->keycode;
+    bool shifted = ((action->implicit_modifiers | action->explicit_modifiers) &
+                    (MOD_LSFT | MOD_RSFT)) != 0U;
+    if (keycode >= HID_USAGE_KEY_KEYBOARD_A && keycode <= HID_USAGE_KEY_KEYBOARD_Z) {
+        label[0] = (char)('A' + keycode - HID_USAGE_KEY_KEYBOARD_A);
+        label[1] = '\0';
+        return true;
+    }
+    if (keycode >= HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION &&
+        keycode <= HID_USAGE_KEY_KEYBOARD_9_AND_LEFT_PARENTHESIS) {
+        static const char normal[] = "123456789";
+        static const char shifted_chars[] = "!@#$%^&*(";
+        size_t index = keycode - HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION;
+        label[0] = shifted ? shifted_chars[index] : normal[index];
+        label[1] = '\0';
+        return true;
+    }
+    if (keycode == HID_USAGE_KEY_KEYBOARD_0_AND_RIGHT_PARENTHESIS) {
+        label[0] = shifted ? ')' : '0';
+        label[1] = '\0';
+        return true;
+    }
+
+    const char *name = NULL;
+    switch (keycode) {
+    case HID_USAGE_KEY_KEYBOARD_RETURN_ENTER:
+        name = "ENT";
+        break;
+    case HID_USAGE_KEY_KEYBOARD_ESCAPE:
+        name = "ESC";
+        break;
+    case HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE:
+        name = "BSP";
+        break;
+    case HID_USAGE_KEY_KEYBOARD_TAB:
+        name = "TAB";
+        break;
+    case HID_USAGE_KEY_KEYBOARD_SPACEBAR:
+        name = "SPC";
+        break;
+    case HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD:
+        name = "DEL";
+        break;
+    default:
+        name = "?";
+        break;
+    }
+    snprintf(label, label_size, "%s", name);
+    return true;
+}
+
+static void draw_sequence_content(struct zmk_widget_screen *widget, struct content_cursor *cursor) {
+    const struct toucan_memory_capture_snapshot *capture = &widget->state.memory.capture;
+
+    for (size_t i = 0; i < capture->sequence_action_count && !cursor->clipped; i++) {
+        const struct toucan_memory_sequence_action *action = &capture->sequence[i];
+        if (!action->pressed) {
+            continue;
+        }
+
+        if (action->usage_page == HID_USAGE_KEY &&
+            action->keycode >= HID_USAGE_KEY_KEYBOARD_LEFTCONTROL &&
+            action->keycode <= HID_USAGE_KEY_KEYBOARD_RIGHT_GUI) {
+            switch (action->keycode) {
+            case HID_USAGE_KEY_KEYBOARD_LEFTCONTROL:
+            case HID_USAGE_KEY_KEYBOARD_RIGHTCONTROL:
+                draw_modifier_icon(widget, cursor, 2);
+                break;
+            case HID_USAGE_KEY_KEYBOARD_LEFTSHIFT:
+            case HID_USAGE_KEY_KEYBOARD_RIGHTSHIFT:
+                draw_modifier_icon(widget, cursor, 1);
+                break;
+            case HID_USAGE_KEY_KEYBOARD_LEFTALT:
+            case HID_USAGE_KEY_KEYBOARD_RIGHTALT:
+                draw_modifier_icon(widget, cursor, 3);
+                break;
+            default:
+                draw_modifier_icon(widget, cursor, widget->state.windows_mode ? 4 : 0);
+                break;
+            }
+            continue;
+        }
+
+        draw_implicit_modifier_icons(widget, cursor,
+                                     action->implicit_modifiers | action->explicit_modifiers);
+        char label[5];
+        if (sequence_key_label(action, label, sizeof(label))) {
+            draw_content_text(widget, cursor, label);
+            cursor->x += 4;
+        }
+    }
+}
+
+static void draw_memory_set_page(struct zmk_widget_screen *widget) {
+    const struct toucan_memory_capture_snapshot *capture = &widget->state.memory.capture;
+    char header[8];
+    snprintf(header, sizeof(header), "MEM %u", capture->slot + 1U);
+    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, CANVAS_PADDING, header, 2);
+
+    const char *mode = capture->mode == TOUCAN_MEMORY_CAPTURE_SEQUENCE ? "SEQ" : "TEXT";
+    int width = STATUS_TEXT_WIDTH(mode, 2);
+    DRAW_STATUS_TEXT(widget, 136 - width, CANVAS_PADDING, mode, 2);
+    for (int x = CANVAS_PADDING; x < 136; x += 2) {
+        set_pixel(widget, x, 26, true);
+    }
+
+    struct content_cursor cursor = {
+        .x = CANVAS_PADDING,
+        .y = 36,
+    };
+
+    if (capture->mode == TOUCAN_MEMORY_CAPTURE_SEQUENCE) {
+        draw_sequence_content(widget, &cursor);
+    } else {
+        draw_content_text(widget, &cursor, capture->text);
+        char counter[8];
+        snprintf(counter, sizeof(counter), "%u/64",
+                 (unsigned int)limited_text_length(capture->text,
+                                                   TOUCAN_MEMORY_TEXT_CAPACITY));
+        width = STATUS_TEXT_WIDTH(counter, 1);
+        DRAW_STATUS_TEXT(widget, 136 - width, 154, counter, 1);
+    }
+
+    if (widget->animation.caret_visible && !cursor.clipped) {
+        fill_rect(widget, cursor.x + 1, cursor.y, 3, 12, true);
+    }
+}
+
+static void draw_scene(struct zmk_widget_screen *widget, enum toucan_display_page page) {
     clear_framebuffer(widget);
+
+    switch (page) {
+    case TOUCAN_DISPLAY_PAGE_BOOT:
+        draw_boot_page(widget);
+        break;
+    case TOUCAN_DISPLAY_PAGE_DASHBOARD:
+        draw_power_band(widget);
+        draw_layer_band(widget);
+        draw_bt_band(widget);
+        draw_memory_band(widget);
+        draw_system_band(widget);
+        break;
+    case TOUCAN_DISPLAY_PAGE_SLEEP:
+        draw_sleep_page(widget);
+        break;
+    case TOUCAN_DISPLAY_PAGE_SOFT_OFF:
+        draw_soft_off_page(widget);
+        break;
+    case TOUCAN_DISPLAY_PAGE_UF2:
+        draw_uf2_page(widget);
+        break;
+    case TOUCAN_DISPLAY_PAGE_MEMORY_SET:
+        draw_memory_set_page(widget);
+        break;
+    }
+}
+
+static void animation_work_handler(struct k_work *work);
+static void page_request_work_handler(struct k_work *work);
+K_WORK_DELAYABLE_DEFINE(animation_work, animation_work_handler);
+K_WORK_DEFINE(page_request_work, page_request_work_handler);
+K_MUTEX_DEFINE(page_request_mutex);
+K_SEM_DEFINE(page_transition_done, 0, 1);
+
+static enum toucan_display_page requested_page;
+static bool requested_page_signal;
+static atomic_t display_ready;
+
+static bool active_profile_unresolved(const struct zmk_widget_screen *widget) {
+    uint8_t profile = MIN(widget->state.active_profile_index, TOUCAN_BT_PROFILE_COUNT - 1);
+    return !widget->state.selected_usb &&
+           (!widget->state.profiles_bonded[profile] ||
+            !widget->state.active_profile_connected);
+}
+
+static bool any_battery_low(const struct zmk_widget_screen *widget) {
+    return widget->state.battery_left <= LOW_BATTERY_PERCENT ||
+           (widget->state.right_connected &&
+            widget->state.battery_right <= LOW_BATTERY_PERCENT);
+}
+
+static void refresh_sustained_animations(struct zmk_widget_screen *widget) {
+    bool dashboard = effective_page(widget) == TOUCAN_DISPLAY_PAGE_DASHBOARD;
+    int64_t now = k_uptime_get();
+    bool pairing = dashboard && active_profile_unresolved(widget);
+    bool low_battery = dashboard && any_battery_low(widget);
+
+    if (pairing && !widget->animation.pairing_blink_active) {
+        widget->animation.pairing_blink_active = true;
+        widget->animation.pairing_marker_visible = true;
+        widget->animation.pairing_due = now + PAIRING_BLINK_MS;
+    } else if (!pairing) {
+        widget->animation.pairing_blink_active = false;
+        widget->animation.pairing_marker_visible = true;
+    }
+
+    if (low_battery && !widget->animation.low_battery_blink_active) {
+        widget->animation.low_battery_blink_active = true;
+        widget->animation.low_battery_fill_visible = true;
+        widget->animation.low_battery_due = now + LOW_BATTERY_BLINK_MS;
+    } else if (!low_battery) {
+        widget->animation.low_battery_blink_active = false;
+        widget->animation.low_battery_fill_visible = true;
+    }
+}
+
+static void schedule_next_animation(void) {
+    int64_t next_due = INT64_MAX;
+    struct zmk_widget_screen *widget;
+
+#define CONSIDER_DUE(active, due)                                                                 \
+    do {                                                                                          \
+        if ((active) && (due) < next_due) {                                                       \
+            next_due = (due);                                                                     \
+        }                                                                                         \
+    } while (false)
+
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        CONSIDER_DUE(widget->animation.transition_active, widget->animation.transition_due);
+        CONSIDER_DUE(widget->animation.boot_to_dashboard_pending,
+                     widget->animation.boot_to_dashboard_due);
+
+        if (!widget->animation.transition_active &&
+            widget->animation.page == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
+            CONSIDER_DUE(widget->animation.layer_roll_active, widget->animation.layer_due);
+            CONSIDER_DUE(widget->animation.pairing_blink_active,
+                         widget->animation.pairing_due);
+            CONSIDER_DUE(widget->animation.low_battery_blink_active,
+                         widget->animation.low_battery_due);
+            CONSIDER_DUE(widget->animation.local_bolt_blink_active,
+                         widget->animation.local_bolt_due);
+            CONSIDER_DUE(widget->animation.right_bolt_blink_active,
+                         widget->animation.right_bolt_due);
+            CONSIDER_DUE(widget->animation.memory_flash_active,
+                         widget->animation.memory_flash_due);
+        }
+
+        if (!widget->animation.transition_active &&
+            widget->animation.page == TOUCAN_DISPLAY_PAGE_MEMORY_SET) {
+            CONSIDER_DUE(true, widget->animation.caret_due);
+        }
+    }
+
+#undef CONSIDER_DUE
+
+    if (next_due == INT64_MAX) {
+        (void)k_work_cancel_delayable(&animation_work);
+        return;
+    }
+
+    int64_t delay = MAX(0, next_due - k_uptime_get());
+    (void)k_work_reschedule_for_queue(zmk_display_work_q(), &animation_work, K_MSEC(delay));
+}
+
+static void start_memory_flash(struct zmk_widget_screen *widget, int slot) {
+    if (slot < 0 || slot >= TOUCAN_MEMORY_SLOT_COUNT) {
+        return;
+    }
+
+    widget->animation.pending_memory_flash_slot = -1;
+    widget->animation.memory_flash_active = true;
+    widget->animation.memory_flash_inverted = false;
+    widget->animation.memory_flash_slot = slot;
+    widget->animation.memory_flash_frame = 0U;
+    widget->animation.memory_flash_due = k_uptime_get() + MEMORY_FLASH_FRAME_MS;
+}
+
+static void finish_page_transition(struct zmk_widget_screen *widget) {
+    widget->animation.page = widget->animation.transition_target;
+    widget->animation.transition_active = false;
+    widget->animation.transition_frame = 0U;
+    widget->animation.transition_revealed_rows = SCREEN_HEIGHT;
+
+    if (widget->animation.page == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
+        refresh_sustained_animations(widget);
+        if (widget->animation.pending_memory_flash_slot >= 0) {
+            start_memory_flash(widget, widget->animation.pending_memory_flash_slot);
+        }
+    } else if (widget->animation.page == TOUCAN_DISPLAY_PAGE_MEMORY_SET) {
+        widget->animation.caret_visible = true;
+        widget->animation.caret_due = k_uptime_get() + CARET_BLINK_MS;
+    }
+
+    if (widget->animation.transition_signal) {
+        widget->animation.transition_signal = false;
+        k_sem_give(&page_transition_done);
+    }
+}
+
+static void start_page_transition(struct zmk_widget_screen *widget,
+                                  enum toucan_display_page target, bool signal) {
+    widget->animation.boot_to_dashboard_pending = false;
+    widget->animation.layer_roll_active = false;
+    widget->animation.pairing_blink_active = false;
+    widget->animation.low_battery_blink_active = false;
+    widget->animation.local_bolt_blink_active = false;
+    widget->animation.right_bolt_blink_active = false;
+    widget->animation.local_bolt_visible = true;
+    widget->animation.right_bolt_visible = true;
+    widget->animation.memory_flash_active = false;
+
+    if (!widget->animation.transition_active && widget->animation.page == target) {
+        draw_scene(widget, target);
+        lv_obj_invalidate(widget->obj);
+        if (signal) {
+            k_sem_give(&page_transition_done);
+        }
+        return;
+    }
+
+    widget->animation.transition_target = target;
+    widget->animation.transition_active = true;
+    widget->animation.transition_signal = signal;
+    widget->animation.transition_frame = 0U;
+    widget->animation.transition_revealed_rows = 0U;
+    widget->animation.transition_due = k_uptime_get() + PAGE_TRANSITION_FRAME_MS;
+    draw_scene(widget, target);
+    schedule_next_animation();
+}
+
+static void page_request_work_handler(struct k_work *work) {
+    ARG_UNUSED(work);
+
+    k_mutex_lock(&page_request_mutex, K_FOREVER);
+    enum toucan_display_page page = requested_page;
+    bool signal = requested_page_signal;
+    requested_page_signal = false;
+    k_mutex_unlock(&page_request_mutex);
+
+    struct zmk_widget_screen *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        if (widget->ready) {
+            start_page_transition(widget, page, signal);
+            return;
+        }
+    }
+
+    if (signal) {
+        k_sem_give(&page_transition_done);
+    }
+}
+
+static void request_page_async(enum toucan_display_page page) {
+    k_mutex_lock(&page_request_mutex, K_FOREVER);
+    requested_page = page;
+    requested_page_signal = false;
+    k_mutex_unlock(&page_request_mutex);
+    (void)k_work_submit_to_queue(zmk_display_work_q(), &page_request_work);
+}
+
+static void request_page_sync(enum toucan_display_page page) {
+    k_sem_reset(&page_transition_done);
+    k_mutex_lock(&page_request_mutex, K_FOREVER);
+    requested_page = page;
+    requested_page_signal = true;
+    k_mutex_unlock(&page_request_mutex);
+
+    int result = k_work_submit_to_queue(zmk_display_work_q(), &page_request_work);
+    if (result >= 0) {
+        if (k_sem_take(&page_transition_done,
+                       K_MSEC(PAGE_TRANSITION_TOTAL_MS + PAGE_TRANSITION_GUARD_MS + 200)) == 0) {
+            /* Let the next LVGL tick flush the final revealed row block before deep sleep. */
+            k_sleep(K_MSEC(PAGE_TRANSITION_GUARD_MS));
+        }
+    }
+}
+
+uint32_t toucan_display_prepare_soft_off(void) {
+    if (atomic_get(&display_ready) == 0) {
+        return 0U;
+    }
+
+    request_page_async(TOUCAN_DISPLAY_PAGE_SOFT_OFF);
+    return PAGE_TRANSITION_TOTAL_MS + PAGE_TRANSITION_GUARD_MS;
+}
+
+void toucan_display_cancel_soft_off(void) {
+    if (atomic_get(&display_ready) != 0) {
+        request_page_async(TOUCAN_DISPLAY_PAGE_DASHBOARD);
+    }
+}
+
+uint32_t toucan_display_prepare_uf2(void) {
+    if (atomic_get(&display_ready) == 0) {
+        return 0U;
+    }
+
+    request_page_async(TOUCAN_DISPLAY_PAGE_UF2);
+    return PAGE_TRANSITION_TOTAL_MS + PAGE_TRANSITION_GUARD_MS;
+}
+
+static void draw_layer_roll_frame(struct zmk_widget_screen *widget) {
+    char from_fallback[6];
+    char to_fallback[6];
+    const char *from = layer_name(widget->animation.layer_from, from_fallback,
+                                  sizeof(from_fallback));
+    const char *to = layer_name(widget->animation.layer_to, to_fallback, sizeof(to_fallback));
+    int frame = widget->animation.layer_frame + 1;
+    int offset = (frame * 26 + LAYER_ROLL_FRAMES / 2) / LAYER_ROLL_FRAMES;
+
+    clear_rows(widget, LAYER_Y, LAYER_HEIGHT);
+    int width = LAYER_TEXT_WIDTH(from, 4);
+    draw_text_clipped(widget, (SCREEN_WIDTH - width + 1) / 2, LAYER_Y - offset, from, 4,
+                      layer_glyphs, ARRAY_SIZE(layer_glyphs), LAYER_Y,
+                      LAYER_Y + 19);
+    width = LAYER_TEXT_WIDTH(to, 4);
+    draw_text_clipped(widget, (SCREEN_WIDTH - width + 1) / 2, LAYER_Y + 26 - offset, to, 4,
+                      layer_glyphs, ARRAY_SIZE(layer_glyphs), LAYER_Y,
+                      LAYER_Y + 19);
+    invalidate_rows(widget, LAYER_Y, 20);
+
+    widget->animation.layer_frame++;
+    if (widget->animation.layer_frame >= LAYER_ROLL_FRAMES) {
+        widget->animation.layer_roll_active = false;
+    } else {
+        widget->animation.layer_due += LAYER_ROLL_FRAME_MS;
+    }
+}
+
+static void update_bolt_animation(struct zmk_widget_screen *widget, bool right) {
+    bool *active = right ? &widget->animation.right_bolt_blink_active
+                         : &widget->animation.local_bolt_blink_active;
+    bool *visible = right ? &widget->animation.right_bolt_visible
+                          : &widget->animation.local_bolt_visible;
+    uint8_t *frame = right ? &widget->animation.right_bolt_frame
+                           : &widget->animation.local_bolt_frame;
+    int64_t *due = right ? &widget->animation.right_bolt_due
+                         : &widget->animation.local_bolt_due;
+
+    (*frame)++;
+    *visible = (*frame >= BOLT_BLINK_FRAMES) || ((*frame & 1U) != 0U);
+    if (*frame >= BOLT_BLINK_FRAMES) {
+        *active = false;
+        *visible = true;
+    } else {
+        *due += BOLT_BLINK_FRAME_MS;
+    }
+
     draw_power_band(widget);
-    draw_layer_band(widget);
-    draw_bt_band(widget);
-    draw_memory_band(widget);
-    draw_system_band(widget);
-    lv_obj_invalidate(widget->obj);
+    invalidate_rows(widget, 7, 12);
+}
+
+static void animation_work_handler(struct k_work *work) {
+    ARG_UNUSED(work);
+    int64_t now = k_uptime_get();
+    struct zmk_widget_screen *widget;
+
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        if (widget->animation.boot_to_dashboard_pending &&
+            now >= widget->animation.boot_to_dashboard_due) {
+            start_page_transition(widget, TOUCAN_DISPLAY_PAGE_DASHBOARD, false);
+        }
+
+        if (widget->animation.transition_active && now >= widget->animation.transition_due) {
+            widget->animation.transition_frame++;
+            uint16_t rows = (widget->animation.transition_frame * SCREEN_HEIGHT +
+                             PAGE_TRANSITION_FRAMES / 2) /
+                            PAGE_TRANSITION_FRAMES;
+            rows = MIN(rows, SCREEN_HEIGHT);
+            invalidate_rows(widget, widget->animation.transition_revealed_rows,
+                            rows - widget->animation.transition_revealed_rows);
+            widget->animation.transition_revealed_rows = rows;
+
+            if (widget->animation.transition_frame >= PAGE_TRANSITION_FRAMES) {
+                finish_page_transition(widget);
+            } else {
+                widget->animation.transition_due += PAGE_TRANSITION_FRAME_MS;
+            }
+        }
+
+        if (widget->animation.transition_active) {
+            continue;
+        }
+
+        if (widget->animation.page == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
+            if (widget->animation.layer_roll_active && now >= widget->animation.layer_due) {
+                draw_layer_roll_frame(widget);
+            }
+            if (widget->animation.pairing_blink_active &&
+                now >= widget->animation.pairing_due) {
+                widget->animation.pairing_marker_visible =
+                    !widget->animation.pairing_marker_visible;
+                widget->animation.pairing_due += PAIRING_BLINK_MS;
+                draw_bt_band(widget);
+                invalidate_rows(widget, 98, 2);
+            }
+            if (widget->animation.low_battery_blink_active &&
+                now >= widget->animation.low_battery_due) {
+                widget->animation.low_battery_fill_visible =
+                    !widget->animation.low_battery_fill_visible;
+                widget->animation.low_battery_due += LOW_BATTERY_BLINK_MS;
+                draw_power_band(widget);
+                invalidate_rows(widget, 25, 8);
+            }
+            if (widget->animation.local_bolt_blink_active &&
+                now >= widget->animation.local_bolt_due) {
+                update_bolt_animation(widget, false);
+            }
+            if (widget->animation.right_bolt_blink_active &&
+                now >= widget->animation.right_bolt_due) {
+                update_bolt_animation(widget, true);
+            }
+            if (widget->animation.memory_flash_active &&
+                now >= widget->animation.memory_flash_due) {
+                widget->animation.memory_flash_frame++;
+                widget->animation.memory_flash_inverted =
+                    (widget->animation.memory_flash_frame & 1U) != 0U;
+                if (widget->animation.memory_flash_frame >= MEMORY_FLASH_FRAMES) {
+                    widget->animation.memory_flash_active = false;
+                    widget->animation.memory_flash_inverted = false;
+                } else {
+                    widget->animation.memory_flash_due += MEMORY_FLASH_FRAME_MS;
+                }
+                draw_memory_band(widget);
+                invalidate_rows(widget, MEMORY_Y, 16);
+            }
+        } else if (widget->animation.page == TOUCAN_DISPLAY_PAGE_MEMORY_SET &&
+                   now >= widget->animation.caret_due) {
+            widget->animation.caret_visible = !widget->animation.caret_visible;
+            widget->animation.caret_due += CARET_BLINK_MS;
+            draw_scene(widget, TOUCAN_DISPLAY_PAGE_MEMORY_SET);
+            invalidate_rows(widget, 36, 124);
+        }
+    }
+
+    schedule_next_animation();
 }
 
 struct local_battery_state {
@@ -501,7 +1419,9 @@ static void local_battery_update_cb(struct local_battery_state state) {
     struct zmk_widget_screen *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         widget->state.battery_left = state.level;
+        refresh_sustained_animations(widget);
         render_bands(widget, DASHBOARD_BAND_POWER);
+        schedule_next_animation();
     }
 }
 
@@ -531,7 +1451,9 @@ static void peripheral_battery_update_cb(struct peripheral_battery_state state) 
     struct zmk_widget_screen *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         widget->state.battery_right = state.level;
+        refresh_sustained_animations(widget);
         render_bands(widget, DASHBOARD_BAND_POWER);
+        schedule_next_animation();
     }
 }
 
@@ -572,6 +1494,9 @@ static struct host_state host_get_state(const zmk_event_t *eh) {
 static void host_update_cb(struct host_state state) {
     struct zmk_widget_screen *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        bool usb_power_appeared = widget->ready && !widget->state.usb_powered &&
+                                  state.usb_powered;
+
         widget->state.selected_usb = state.selected_usb;
         widget->state.usb_powered = state.usb_powered;
         widget->state.usb_hid_ready = state.usb_hid_ready;
@@ -579,7 +1504,20 @@ static void host_update_cb(struct host_state state) {
         widget->state.active_profile_connected = state.active_profile_connected;
         memcpy(widget->state.profiles_bonded, state.profiles_bonded,
                sizeof(widget->state.profiles_bonded));
+
+        if (usb_power_appeared && effective_page(widget) == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
+            widget->animation.local_bolt_blink_active = true;
+            widget->animation.local_bolt_visible = false;
+            widget->animation.local_bolt_frame = 0U;
+            widget->animation.local_bolt_due = k_uptime_get() + BOLT_BLINK_FRAME_MS;
+        } else if (!state.usb_powered) {
+            widget->animation.local_bolt_blink_active = false;
+            widget->animation.local_bolt_visible = true;
+        }
+
+        refresh_sustained_animations(widget);
         render_bands(widget, DASHBOARD_BAND_POWER | DASHBOARD_BAND_BT);
+        schedule_next_animation();
     }
 }
 
@@ -601,8 +1539,25 @@ static struct layer_state layer_get_state(const zmk_event_t *eh) {
 static void layer_update_cb(struct layer_state state) {
     struct zmk_widget_screen *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        uint8_t previous = widget->state.layer_index;
         widget->state.layer_index = state.index;
-        render_bands(widget, DASHBOARD_BAND_LAYER);
+
+        if (!widget->ready || previous == state.index) {
+            continue;
+        }
+
+        if (!widget->animation.transition_active &&
+            widget->animation.page == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
+            widget->animation.layer_roll_active = true;
+            widget->animation.layer_from = previous;
+            widget->animation.layer_to = state.index;
+            widget->animation.layer_frame = 0U;
+            widget->animation.layer_due = k_uptime_get() + LAYER_ROLL_FRAME_MS;
+            schedule_next_animation();
+        } else if (effective_page(widget) == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
+            /* Keep a dashboard being revealed current even if its layer changes mid-wipe. */
+            draw_layer_band(widget);
+        }
     }
 }
 
@@ -621,9 +1576,25 @@ static struct toucan_split_status_changed split_status_get_state(const zmk_event
 static void split_status_update_cb(struct toucan_split_status_changed state) {
     struct zmk_widget_screen *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        bool usb_power_appeared = widget->ready && !widget->state.right_usb_powered &&
+                                  state.usb_powered;
+
         widget->state.right_connected = state.connected;
         widget->state.right_usb_powered = state.usb_powered;
+
+        if (usb_power_appeared && effective_page(widget) == TOUCAN_DISPLAY_PAGE_DASHBOARD) {
+            widget->animation.right_bolt_blink_active = true;
+            widget->animation.right_bolt_visible = false;
+            widget->animation.right_bolt_frame = 0U;
+            widget->animation.right_bolt_due = k_uptime_get() + BOLT_BLINK_FRAME_MS;
+        } else if (!state.usb_powered) {
+            widget->animation.right_bolt_blink_active = false;
+            widget->animation.right_bolt_visible = true;
+        }
+
+        refresh_sustained_animations(widget);
         render_bands(widget, DASHBOARD_BAND_POWER);
+        schedule_next_animation();
     }
 }
 
@@ -675,7 +1646,12 @@ static void platform_update_cb(struct platform_state state) {
     struct zmk_widget_screen *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         widget->state.windows_mode = state.windows;
-        render_bands(widget, DASHBOARD_BAND_SYSTEM);
+        if (effective_page(widget) == TOUCAN_DISPLAY_PAGE_MEMORY_SET) {
+            draw_scene(widget, TOUCAN_DISPLAY_PAGE_MEMORY_SET);
+            invalidate_rows(widget, 36, 124);
+        } else {
+            render_bands(widget, DASHBOARD_BAND_SYSTEM);
+        }
     }
 }
 
@@ -683,11 +1659,56 @@ ZMK_DISPLAY_WIDGET_LISTENER(toucan_display_platform, struct platform_state, plat
                             platform_get_state);
 ZMK_SUBSCRIPTION(toucan_display_platform, toucan_platform_mode_changed);
 
-static void draw_sleep_page(struct zmk_widget_screen *widget) {
-    clear_framebuffer(widget);
-    draw_sleep_screen(widget->obj);
-    lv_obj_invalidate(widget->obj);
+struct memory_display_state {
+    struct toucan_memory_snapshot snapshot;
+    int8_t slot;
+    bool saved;
+};
+
+static struct memory_display_state memory_get_state(const zmk_event_t *eh) {
+    const struct toucan_memory_state_changed *event =
+        eh != NULL ? as_toucan_memory_state_changed(eh) : NULL;
+    struct memory_display_state state = {
+        .slot = event != NULL ? event->slot : -1,
+        .saved = event != NULL && event->saved,
+    };
+    toucan_memory_get_snapshot(&state.snapshot);
+    return state;
 }
+
+static void memory_update_cb(struct memory_display_state state) {
+    struct zmk_widget_screen *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        bool was_capturing = widget->state.memory.capture.active;
+        widget->state.memory = state.snapshot;
+
+        if (!widget->ready) {
+            continue;
+        }
+
+        if (!was_capturing && state.snapshot.capture.active) {
+            start_page_transition(widget, TOUCAN_DISPLAY_PAGE_MEMORY_SET, false);
+        } else if (was_capturing && !state.snapshot.capture.active) {
+            widget->animation.pending_memory_flash_slot = state.saved ? state.slot : -1;
+            start_page_transition(widget, TOUCAN_DISPLAY_PAGE_DASHBOARD, false);
+        } else if (state.snapshot.capture.active &&
+                   effective_page(widget) == TOUCAN_DISPLAY_PAGE_MEMORY_SET) {
+            draw_scene(widget, TOUCAN_DISPLAY_PAGE_MEMORY_SET);
+            invalidate_rows(widget, 0, SCREEN_HEIGHT);
+        } else {
+            render_bands(widget, DASHBOARD_BAND_MEMORY);
+            if (state.saved) {
+                start_memory_flash(widget, state.slot);
+            }
+        }
+
+        schedule_next_animation();
+    }
+}
+
+ZMK_DISPLAY_WIDGET_LISTENER(toucan_display_memory, struct memory_display_state, memory_update_cb,
+                            memory_get_state);
+ZMK_SUBSCRIPTION(toucan_display_memory, toucan_memory_state_changed);
 
 static int display_activity_event_handler(const zmk_event_t *eh) {
     const struct zmk_activity_state_changed *event = as_zmk_activity_state_changed(eh);
@@ -696,18 +1717,17 @@ static int display_activity_event_handler(const zmk_event_t *eh) {
     }
 
     if (event->state == ZMK_ACTIVITY_SLEEP) {
-        set_sleep_screen_active(true);
-
+        request_page_sync(TOUCAN_DISPLAY_PAGE_SLEEP);
+    } else if (event->state == ZMK_ACTIVITY_ACTIVE) {
         struct zmk_widget_screen *widget;
-        SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { draw_sleep_page(widget); }
-
-        lv_task_handler();
-        lv_refr_now(NULL);
-    } else if (event->state == ZMK_ACTIVITY_ACTIVE && is_sleep_screen_active()) {
-        set_sleep_screen_active(false);
-
-        struct zmk_widget_screen *widget;
-        SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { render_full_dashboard(widget); }
+        SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+            if (widget->ready && effective_page(widget) == TOUCAN_DISPLAY_PAGE_SLEEP) {
+                request_page_async(widget->state.memory.capture.active
+                                       ? TOUCAN_DISPLAY_PAGE_MEMORY_SET
+                                       : TOUCAN_DISPLAY_PAGE_DASHBOARD);
+                break;
+            }
+        }
     }
 
     return ZMK_EV_EVENT_BUBBLE;
@@ -717,18 +1737,24 @@ ZMK_LISTENER(toucan_display_activity, display_activity_event_handler);
 ZMK_SUBSCRIPTION(toucan_display_activity, zmk_activity_state_changed);
 
 int zmk_widget_screen_init(struct zmk_widget_screen *widget, lv_obj_t *parent) {
+    memset(&widget->state, 0, sizeof(widget->state));
+    memset(&widget->animation, 0, sizeof(widget->animation));
+
     widget->obj = lv_canvas_create(parent);
     lv_canvas_set_buffer(widget->obj, widget->cbuf, SCREEN_WIDTH, SCREEN_HEIGHT,
                          LV_IMG_CF_TRUE_COLOR);
     lv_obj_set_size(widget->obj, SCREEN_WIDTH, SCREEN_HEIGHT);
     lv_obj_clear_flag(widget->obj, LV_OBJ_FLAG_SCROLLABLE);
 
-    clear_framebuffer(widget);
-
-    /* Visual-only v1 placeholders; no memory controls or persistence yet. */
-    widget->state.memory_slots_set[0] = true;
-    widget->state.memory_slots_set[1] = true;
-    widget->state.memory_slots_set[2] = false;
+    widget->animation.page = TOUCAN_DISPLAY_PAGE_BOOT;
+    widget->animation.transition_target = TOUCAN_DISPLAY_PAGE_BOOT;
+    widget->animation.pairing_marker_visible = true;
+    widget->animation.low_battery_fill_visible = true;
+    widget->animation.local_bolt_visible = true;
+    widget->animation.right_bolt_visible = true;
+    widget->animation.memory_flash_slot = -1;
+    widget->animation.pending_memory_flash_slot = -1;
+    widget->animation.caret_visible = true;
 
     sys_slist_append(&widgets, &widget->node);
     toucan_display_local_battery_init();
@@ -738,9 +1764,15 @@ int zmk_widget_screen_init(struct zmk_widget_screen *widget, lv_obj_t *parent) {
     toucan_display_split_status_init();
     toucan_display_caps_init();
     toucan_display_platform_init();
+    toucan_display_memory_init();
 
     widget->ready = true;
-    render_full_dashboard(widget);
+    atomic_set(&display_ready, 1);
+    draw_scene(widget, TOUCAN_DISPLAY_PAGE_BOOT);
+    lv_obj_invalidate(widget->obj);
+    widget->animation.boot_to_dashboard_pending = true;
+    widget->animation.boot_to_dashboard_due = k_uptime_get() + BOOT_HOLD_MS;
+    schedule_next_animation();
     return 0;
 }
 

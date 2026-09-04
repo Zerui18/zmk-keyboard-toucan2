@@ -1,0 +1,5 @@
+description: Enter the local Toucan half's UF2 bootloader after display feedback
+
+compatible: "zmk,behavior-toucan-bootloader"
+
+include: zero_param.yaml

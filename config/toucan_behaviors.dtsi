@@ -17,6 +17,39 @@
             display-name = "Battery Readout";
         };
 
+        toucan_bootloader: tbl {
+            compatible = "zmk,behavior-toucan-bootloader";
+            #binding-cells = <0>;
+            display-name = "Toucan UF2 Bootloader";
+        };
+
+        memory_mode: memmode {
+            compatible = "zmk,behavior-toucan-memory-mode";
+            #binding-cells = <0>;
+            display-name = "Memory Clear";
+        };
+
+        memory_set: memset {
+            compatible = "zmk,behavior-toucan-memory-set";
+            #binding-cells = <1>;
+            display-name = "Set Memory Slot";
+        };
+
+        memory_use: memuse {
+            compatible = "zmk,behavior-toucan-memory-use";
+            #binding-cells = <1>;
+            display-name = "Use Memory Slot";
+        };
+
+        /* Tap a slot to play it; hold it deliberately to replace it. */
+        memory_slot: memslot {
+            compatible = "zmk,behavior-hold-tap";
+            #binding-cells = <2>;
+            flavor = "tap-preferred";
+            tapping-term-ms = <400>;
+            bindings = <&memory_set>, <&memory_use>;
+        };
+
         /* Achordion-style opposite-hand modifier taps. */
         left_mod_tap: lmtht {
             compatible = "zmk,behavior-hold-tap";

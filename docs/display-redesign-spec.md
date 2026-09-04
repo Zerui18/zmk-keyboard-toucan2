@@ -1,9 +1,9 @@
 # Toucan2 display redesign reference
 
-Generated 2026-08-31 (Asia/Singapore) from repository commit `8e97cbfa272a`
-plus the current uncommitted Bluetooth-layer/profile-indicator work. This is a
-design input and implementation map for replacing the left-half UI from
-scratch.
+Generated 2026-08-31 (Asia/Singapore) as the hardware audit and updated on
+2026-09-03 after implementing the v2 handoff. Historical pre-redesign sections
+are labelled; the final implementation section is authoritative for the live
+renderer and interaction model.
 
 ## Executive specification
 
@@ -26,7 +26,7 @@ scratch.
 | Rotation support | Not supported by the pinned LS0xx driver | A rotated design must transform its own coordinates/assets or introduce a wrapper driver |
 | Brightness / contrast control | Not supported | Reflective panel; pinned driver returns `-ENOTSUP` |
 | Partial updates | Full-width row bands only | `x` must be 0 and width must be 144; any contiguous subset of rows is legal |
-| Current UI strategy | Event-driven, full-screen canvas redraw | Every relevant state event clears and redraws all 144×168 pixels |
+| Current UI strategy | Event-driven row bands plus retained full-screen pages | Static dashboard events invalidate only their bands; page changes use a bounded reveal |
 
 The folder name `nice_view_gem` is inherited from the original widget project.
 It must not be used to choose a screen template: the common nice!view is
@@ -48,7 +48,7 @@ distinct rates that matter:
 | Theoretical full-screen bus ceiling | 37.18 frames/s | Pure wire-time bound; not a practical UI target |
 | Practical current full-screen ceiling | About 30–33 frames/s | Bounded by the 30 ms LVGL refresh period and transfer overhead |
 | Normal idle UI rate | 0 frames/s | Memory pixels retain their state; the current UI redraws only on events |
-| WPM sampling | Once per second | ZMK recalculates WPM every second and resets its measurement window every five seconds |
+| WPM sampling | Disabled in the current UI | The pinned ZMK source can calculate it once per second, but v2 deliberately has no WPM display |
 | Battery reports | Once per 60 seconds | Both halves use `CONFIG_ZMK_BATTERY_REPORT_INTERVAL=60` |
 
 ### Transfer budget
@@ -102,7 +102,7 @@ Recommended policy for the replacement UI:
 - Permit up to 15 FPS only for short transitions.
 - Use partial row-band redraws for anything that should move more smoothly.
 
-The current histogram occupies rows `78..99`, a 22-row band. Updating only
+The retired pre-redesign histogram occupied rows `78..99`, a 22-row band. Updating only
 that band takes 442 bytes or 3.536 ms of ideal wire time. At 10 FPS it consumes
 about **3.5% of SPI time**, compared with 26.9% for ten full-screen updates.
 Its WPM source still changes at most once per second, so a smoother animation
@@ -222,10 +222,10 @@ Because blank-on-idle is disabled, entering normal IDLE leaves the screen as-is
 and leaves the LVGL timer running. On the SLEEP transition the custom renderer
 draws its sleep page and forces one flush before the MCU sleeps.
 
-## Current display design
+## Pre-redesign display design (historical baseline)
 
-The active style is `CONFIG_TOUCAN_STATUS_SCREEN=2`: white foreground on a
-black background.
+Before the v2 implementation, the active style was
+`CONFIG_TOUCAN_STATUS_SCREEN=2`, with the following layout.
 
 | Region | Geometry | Current content and behavior |
 | --- | --- | --- |
@@ -278,12 +278,12 @@ The sleep bitmap is indexed 1-bit, 96×96, and occupies 1,160 bytes including
 its eight-byte palette. Assets should be generated at exact 1:1 pixel size;
 grayscale and antialiasing cannot be represented on this panel.
 
-## Memory and performance budget
+## Pre-redesign memory and performance budget
 
 The nRF52840 provides a 64 MHz Cortex-M4F, 1 MiB flash, and 256 KiB RAM. The
 bootloader/partition layout leaves a 788 KiB application flash region.
 
-Figures from the latest successful left build in the persistent local toolchain:
+These figures are retained as the before-redesign baseline:
 
 | Resource | Used | Available region | Headroom |
 | --- | ---: | ---: | ---: |
@@ -296,7 +296,7 @@ The right build, which has no display, uses 202,157 B of application flash and
 56,166 B of RAM. That comparison is only directional because the halves also
 differ in USB Studio, split role, and trackpad features.
 
-### Current display-specific allocations
+### Display-specific allocations before cleanup
 
 | Allocation | Bytes | Notes |
 | --- | ---: | --- |
@@ -325,16 +325,19 @@ off-screen compositing or page transitions.
 | Signal | Source / cadence | Quality and caveats |
 | --- | --- | --- |
 | Left battery state of charge | `zmk_battery_state_changed`, nominally every 60 s | Filtered custom estimator percentage, 0–100 |
-| Right battery state of charge | `zmk_peripheral_battery_state_changed`, source 0 | Proxied across split BLE; set to 0 on disconnect, which is ambiguous with an empty battery |
+| Right battery state of charge | `zmk_peripheral_battery_state_changed`, source 0 | Proxied across split BLE and interpreted alongside the explicit right-link event |
 | Left USB power presence | `zmk_usb_conn_state_changed` / `zmk_usb_is_powered()` | Power present is not proof of active charging or charge completion |
 | Selected output transport | `zmk_endpoint_changed` | USB, BLE, or none |
 | Active BLE profile | `zmk_ble_active_profile_index()` | Index 0–4, displayed to the user as BT1–BT5 |
 | Active BLE connection | `zmk_ble_active_profile_is_connected()` | Already stored but currently ignored by the drawing code |
-| Active profile bonded/open | `zmk_ble_active_profile_is_open()` | Already stored for the active profile |
-| All five profile occupancy states | `zmk_ble_profile_is_open(i)` | Current uncommitted profile renderer queries this for each slot |
+| Active profile bonded/open | `zmk_ble_active_profile_is_open()` | Used together with connection state for the resolved/unresolved marker |
+| All five profile occupancy states | `zmk_ble_profile_is_open(i)` | Queried for every dashboard slot |
 | Highest active layer | `zmk_keymap_highest_layer_active()` | Immediate layer events; name comes from `display-name` in the keymap |
-| WPM | `zmk_wpm_state_changed` | Recalculated each second from released keycodes; five keystrokes = one word |
 | Activity state | `zmk_activity_state_changed` | Active, idle, or sleep |
+| Right split link and USB power | `toucan_split_status_changed` | Explicitly relayed; no 0%-battery disconnect heuristic |
+| Host Caps Lock | `zmk_hid_indicators_changed` | Drives the CAPS footer label |
+| macOS/Windows mode | `toucan_platform_mode_changed` | Persistent mode drives the MAC/WIN badge |
+| Memory slot/capture state | `toucan_memory_state_changed` | Exposes slot types and live capture only; persisted content stays private |
 
 ### Available in pinned ZMK with another listener or query
 
@@ -344,7 +347,7 @@ These require display code but no new hardware:
 | --- | --- |
 | Exact USB state | `ZMK_USB_CONN_NONE`, `POWERED`, or `HID` distinguishes charging-only USB from a ready USB HID link |
 | Connection for any BLE profile | Query `zmk_ble_profile_is_connected(i)`, not just the active profile |
-| Host lock LEDs | `zmk_hid_indicators_changed` provides Num Lock, Caps Lock, Scroll Lock, Compose, and Kana bits when the host reports them |
+| Other host lock LEDs | The existing indicator event also provides Num Lock, Scroll Lock, Compose, and Kana bits |
 | Active modifiers | `zmk_modifiers_state_changed` provides modifier press/release changes; maintain a bitset in the display model |
 | Last logical keycode | `zmk_keycode_state_changed` supplies usage page, keycode, implicit/explicit modifiers, press state, and timestamp |
 | Last physical key / half | `zmk_position_state_changed` supplies position, local/peripheral source, press state, and timestamp |
@@ -356,21 +359,19 @@ These require display code but no new hardware:
 | Firmware/build identity | Compile a short Git describe/hash string into the image; static information costs no event plumbing |
 
 The pinned central split API does not expose a simple public per-peripheral
-connection getter/event to widgets. The current code uses right battery `0` as
-a disconnect proxy. A robust right-link icon should add a small central-side
-status adapter instead of treating 0% as disconnected.
+connection getter/event to widgets. The Toucan adapter now relays explicit
+right-link and right-USB-power state, so the display does not infer either one
+from a 0% battery reading.
 
 ### Needs a small custom API or event
 
 | Candidate UI signal | Why it is not ready today |
 | --- | --- |
-| macOS vs Windows shortcut mode | `windows_mode` is private static state in `toucan_platform_mode.c`; add a getter and change event |
 | Right raw/filtered voltage on the screen | The private split path sends raw voltage only after `&battery` and immediately types it; cache/relay a structured value instead |
-| Right USB/charging state | Not relayed from peripheral to central |
 | True charge/discharge/charge-complete state | The current hardware path measures only voltage and USB presence; no charger-status integration or fuel gauge is exposed |
 | Split RSSI / link quality | Requires polling the Zephyr Bluetooth connection or a custom metric and should be rate-limited |
 | Trackpad health / packet rate | Add counters and a last-event timestamp around the existing packed X/Y transport |
-| Soft-power arming/countdown | State is private to `toucan_soft_power.c`; exposing it would require an event, and the final screen cannot be actively blanked with the current display wiring |
+| Soft-power arming/countdown | State remains private; only the final retained OFF page and actual wake-key list are exposed |
 | Caps Word state | Pinned ZMK v0.3 has no public Caps Word state event/getter, and the current Toucan keymap does not bind Caps Word |
 | Battery current, capacity remaining, time remaining, or temperature | Not measurable with the present voltage-divider-only battery sensor |
 
@@ -387,9 +388,9 @@ The display should assume the following named layer set and access scheme.
 | 3 | `CLP` | Hold `S`, then use `D`/`F` | Copy, cut, paste |
 | 4 | `EDT` | Hold `D`, then use `S`/`F` | Undo, redo |
 | 5 | `APP` | Hold `C`, then use `X`/`V` | Cycle backward/forward through applications |
-| 6 | `MOU` | Trackpad touch | Mouse buttons on thumbs |
-| 7 | `BT` | Hold outer-left thumb | Profile selection and guarded profile clear |
-| 8 | `SYS` | Hold outer-right thumb | Diagnostics, F-keys, volume, platform mode |
+| 6 | `MOU` | Trackpad touch | Opaque pointer layer; D/F scroll and mouse buttons on thumbs |
+| 7 | `SYS` | Hold outer-left thumb | Bluetooth profiles plus persistent macro memory |
+| 8 | `FN` | Hold outer-right thumb | Diagnostics, F-keys, volume, platform mode |
 | 9 | `DNG` | Hold both outer thumbs | Bootloader and reset |
 
 ### Base
@@ -399,7 +400,7 @@ Esc     Q/NAV   W       E       R       T        Y       U       I       O      
 =/Ctrl  A/SYM   S/CLIP  D/EDIT  F       G        H       J       K       L       ;/SYM   '/Ctrl
 -       Z/Shift X       C/APP   V       B        N       M       ,       .       //Shift _
 
-                    BT  Backspace  Tab        Enter  Space  SYS
+                   SYS  Backspace  Tab        Enter  Space  FN
 ```
 
 All thumb keys are deliberately single-role. The outer thumbs are layer keys;
@@ -433,13 +434,17 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
   using that same persisted selection. X/V send only Shift+Tab/Tab, so the
   switcher remains visible between steps.
 
-### Mouse, Bluetooth, system, and danger
+### Mouse, system, function, and danger
 
-- `MOU` thumb row: `Middle Left Right | Left Right Middle`.
-- `BT` current working tree: the left home row is
-  `BT_CLR, BT1, BT2, BT3, BT4, BT5`. `BT_CLR` is inert on release before two
-  seconds; a two-second hold clears only the selected profile.
-- `SYS`: `Z` requests raw voltage from both halves, `M` toggles macOS/Windows
+- `MOU` is opaque: every unassigned position is `&none`. D/F scroll up/down
+  using HID Resolution Multipliers at 10 units/second and a 16 ms tick; the
+  thumb row is `Middle Left Right | Left Right Middle`.
+- `SYS`: the left top row is `BT_CLR, BT1, BT2, BT3, BT4, BT5`; the left home
+  row is `MEM_CLR, MEM1, MEM2, MEM3, MEM4, MEM5`. `BT_CLR` is inert on release
+  before two seconds; a two-second hold clears only the selected profile.
+  Tapping a memory slot replays it, holding it for 400 ms starts capture, and
+  holding MEM_CLR while tapping a slot clears it.
+- `FN`: `Z` requests raw voltage from both halves, `M` toggles macOS/Windows
   mode, `Esc` unlocks Studio, the left side carries F1–F12, and the top-right
   positions carry volume down/mute/up.
 - `DNG`: physical `Q`/`P` enter the bootloader on their own halves and physical
@@ -478,8 +483,8 @@ Soft power is independent on each half and uses a deliberate tap-release-hold
 sequence before the five-key chord:
 
 ```text
-left:  A X D V + outer-left BT thumb
-right: ; . K M + outer-right SYS thumb
+left:  A X D V + outer-left SYS thumb
+right: ; . K M + outer-right FN thumb
 ```
 
 Shutdown input is swallowed. Wake requires the exact same five physical keys;
@@ -490,10 +495,8 @@ The priming tap must be at most 200 ms, the second thumb press must begin within
 within 120 ms. Early wake validation waits up to 1 s for the exact chord and
 requires it to remain stable for 20 ms.
 
-The more detailed layout rationale remains in
-[`toucan-moonlander-layout.md`](toucan-moonlander-layout.md), but its Bluetooth
-section predates the current uncommitted one-row/two-second-clear changes. This
-document records the current working tree.
+The detailed interaction guide is
+[`toucan-moonlander-layout.md`](toucan-moonlander-layout.md).
 
 ## Custom firmware modules under `src/`
 
@@ -502,11 +505,14 @@ document records the current working tree.
 | `toucan_battery_estimator.c/.h` | Five ADC readings 10 ms apart, median, per-half mV offset, nonlinear 3.3–4.2 V LiPo curve, 1/4 IIR filter, maximum 2 percentage points per report, persisted state restored when within 200 mV | Local raw, calibrated/filtered voltage and percent exist; only percentage is currently in the UI |
 | `behavior_toucan_battery_readout.c` | Global `&battery` behavior asks each half for its own reading | Could be changed from typing text to opening a temporary diagnostics page |
 | `toucan_battery_readout.c/.h` | Queues left raw mV, relays right raw mV through a private input-split message, waits for a ready endpoint, then types `left=...mv` and `right=...mv` | Reuse the relay but cache structured state; do not type when the intended action is screen-only |
-| `toucan_platform_mode.c` | Persistent macOS/Windows mode; platform-aware command-key behavior keeps dedicated Ctrl unchanged | Add getter/event before showing an OS badge |
-| `toucan_soft_power.c` | Per-half arming, exact shutdown chord suppression, peripheral suspension, retained marker, early wake validation, rejected-wake return to System OFF | Current display blanking call is unsupported by the local LS0xx node; a redesign can draw an explicit off page before shutdown |
+| `toucan_platform_mode.c` | Persistent macOS/Windows mode; platform-aware command-key behavior keeps dedicated Ctrl unchanged; exposes getter/change event | Drives the live MAC/WIN footer and sequence-preview modifier art |
+| `toucan_memory.c/.h` | Five persistent `empty|sequence|text` slots, private capture, playback, clear, and SYS-thumb capture gestures | Drives the ME row and MEM SET page; content is wiped from the capture buffer after save/cancel |
+| `toucan_bootloader.c/.h` | Side-local UF2 request shared by the DNG key and guarded serial touch | Gives the left display time to reveal the retained UF2 page; right reboots immediately |
+| `toucan_display_hooks.h` | Narrow pre-off and pre-UF2 hooks with millisecond delay return values | Keeps power/reboot modules independent of the optional screen implementation |
+| `toucan_soft_power.c` | Per-half arming, exact shutdown chord suppression, peripheral suspension, retained marker, early wake validation, rejected-wake return to System OFF | Exposes the actual wake positions and asks the left renderer to reveal OFF before shutdown |
 | `toucan_split_xy_packing.c` | Packs adjacent signed 16-bit X/Y into one 32-bit private MSC event and reconstructs it centrally | Protect this path: never add high-rate screen traffic to the same split BLE flow |
 | `toucan_split_protocol.h` | Reserves private MSC code `0x7F01` for packed X/Y | Extend with named message types if structured display telemetry is added |
-| `toucan_usb_bootloader_touch.c` | Guarded 1200-baud DTR on/off sequence followed by 2400-baud DTR on/off within 2 s enters UF2 | Useful diagnostic icon/state only if explicitly exposed; current state is private and normally too brief to display |
+| `toucan_usb_bootloader_touch.c` | Guarded 1200-baud DTR on/off sequence followed by 2400-baud DTR on/off within 2 s requests UF2 | Uses the same display-aware bootloader path as the keymap |
 
 The build selects these modules through the repository root
 [`CMakeLists.txt`](../CMakeLists.txt) and [`Kconfig`](../Kconfig).
@@ -539,44 +545,90 @@ grayscale, top-left origin, and exact integer-pixel placement. The firmware has
 ample flash; RAM and unnecessary full-screen redraws are the meaningful design
 constraints.
 
-## Implemented static dashboard
+## Implemented v2 dashboard, pages, and memory
 
-The handoff in `/Users/zeruichen/Downloads/handoff` is now implemented as the
-single linked status renderer. It uses the handoff's embedded 5×6 status font,
-4×5 layer font, pixel icons, and these five independently invalidated bands:
+The `/Users/zeruichen/Downloads/handoff-v2` design is implemented by the single
+linked renderer in `widgets/screen.c`. It uses embedded 5×6 and 4×5 one-bit
+fonts, exact integer geometry, one 24,192-byte LVGL canvas, dirty row bands,
+and a single event-driven animation scheduler. The older `sleep.c` renderer and
+QuinqueFive assets are no longer linked.
 
-The implemented polarity is subsequently inverted from the original reference:
-`CONFIG_NICE_VIEW_WIDGET_INVERTED=y` renders black UI pixels on a white
-background. Disabling that option restores the handoff's white-on-black
-polarity, including the sleep page.
+`CONFIG_NICE_VIEW_WIDGET_INVERTED=y` preserves the polarity requested after the
+first handoff. Changing that setting flips every dashboard and page pixel
+together.
 
-| Band | Content rows | Live source |
+### Dashboard geometry and live state
+
+| Band | Rows | Live source |
 | --- | --- | --- |
-| PWR | `3..30` | Both battery percentages, exact selected USB/BLE state, all BLE profile states, explicit right split connection, and relayed right USB power |
-| LAYER | `44..65` | Highest active ZMK layer |
-| BT | `79..98` | Five live bonded/open slots, active profile, and connection state |
-| MEM | `112..131` | Visual prototype only: slots 1 and 2 set, slot 3 empty |
-| SYS | `145..160` | Host Caps Lock and persistent MAC/WIN mode |
+| PWR | `7..35` dirty, content starts `8` | Left/right filtered battery percentage, selected USB/BLE host, USB HID readiness, explicit right link state, and each half's USB-power presence |
+| LAYER | `48..69` | Highest active layer: `BASE SYM NAV CLP EDT APP MOU SYS FN DNG` |
+| BT | `82..101` | Five bonded/open profiles, active profile, and resolved/unresolved connection marker |
+| ME | `114..133` | Five persistent memory slot types; a prime mark means sequence, a plain digit means text, and a dot means empty |
+| SYS | `146..161` | Host Caps Lock and persistent MAC/WIN mode |
 
-The bolt artwork begins at `y=2` in the reference render, so the PWR dirty
-range is deliberately expanded by one row to `2..30`; all other band ranges
-match the handoff exactly. Boot and sleep/page transitions invalidate the full
-frame. Ordinary state changes clear and invalidate only the affected rows.
+The slot columns begin at x=38 with a 20-pixel pitch. USB appearance blinks the
+relevant half's bolt for six 250 ms frames; an unresolved active BLE profile
+blinks only its dotted underline every 500 ms; battery fill at or below 15%
+blinks every second. Ordinary connection, profile, caps, platform, battery, and
+memory changes redraw only their row bands. With no changing condition, the
+dashboard transfers zero bytes.
 
-The MEM band has no layer, behaviors, recording, playback, clearing, or
-persistence yet. Its two set slots are intentionally hard-coded in
-`zmk_widget_screen_init()` so the physical design can be judged before choosing
-an interaction model.
+### Retained pages and bounded motion
 
-The right half now relays USB-power presence using private input-split code
-`0x7F02`, adjacent to but distinct from packed trackpad X/Y code `0x7F01`.
-Central-role Bluetooth callbacks provide explicit split connect/disconnect
-state, rather than treating a cached peripheral battery value of zero as a
-disconnect. The platform behavior likewise exposes a getter and change event
-for the footer badge.
+- BOOT shows `TOUCAN` and `ZMK 0.3 · <7-char Git SHA>`, holds for 450 ms, then
+  reveals the dashboard.
+- SLEEP shows the crescent, frozen host label, and both battery bars before
+  normal ZMK deep sleep.
+- OFF shows the power glyph and a miniature matrix generated from the real
+  left soft-power wake positions before System OFF. The memory LCD retains it
+  while the MCU is off.
+- UF2 appears before either the DNG bootloader key or guarded 1200/2400-baud
+  host request reboots the left half. The screenless right half has no delay.
+- MEM SET shows the selected slot, SEQ/TEXT mode, live private capture, and a
+  530 ms caret blink.
 
-The legacy style-specific widget files remain in the source tree for history,
-but are no longer compiled. WPM is disabled, and the screen widget owns one
-24,192-byte framebuffer instead of three. The current left build reports
-116,402 bytes of RAM in use (44.40% of 256 KiB); its `screen_widget` symbol is
-24,224 bytes including state and bookkeeping.
+Page changes are seven top-down row reveals at 83 ms per frame. Each row is
+invalidated once by the transition itself, for one 3,362-byte full-frame cost
+rather than seven full-frame transfers. Layer names use four clipped roll
+frames at the same 12 Hz cadence. Saving a memory slot flashes only that cell
+for four 150 ms frames.
+
+### Persistent memory interaction
+
+The SYS layer's left home row is `MEM_CLR, MEM1..MEM5`. A slot tap replays it;
+a 400 ms hold starts replacement capture in SEQ mode. The initiating SYS thumb
+may then be released and normal keymap resolution continues, including layers,
+hold-taps, macros, combos, Enter, and Escape. The memory listener consumes the
+resulting keycode stream before ZMK's HID listener, so nothing captured reaches
+USB or BLE.
+
+During capture the physical SYS thumb is reserved as follows:
+
+- single tap switches SEQ/TEXT only when the capture is empty;
+- double tap (second press within 275 ms) cancels and securely wipes the
+  capture buffer;
+- 600 ms hold saves a non-empty capture and wipes the capture buffer.
+
+SEQ stores up to 64 resolved press/release actions and replays their order,
+with final safety releases for any key whose release could not fit. TEXT stores
+up to 64 literal characters and compensates for the host Caps Lock state during
+capture and playback. Escape has no special control meaning and can be stored
+in SEQ. MEM_CLR held with a slot tap clears that one persisted slot.
+
+The memory subsystem exists only on the central/left build. Both its keycode
+listener and SYS-thumb position listener link before ZMK's HID/keymap listeners;
+keys already held before capture are still allowed to release at the host, and
+keys swallowed by a completed or cancelled capture stay swallowed through
+their releases.
+
+The right half relays USB-power presence using private input-split code
+`0x7F02`, separate from packed trackpad X/Y code `0x7F01`. No display update is
+placed on the high-rate trackpad transport path.
+
+The verified 2026-09-03 builds use 361,296 B flash / 125,447 B RAM on the left
+and 203,132 B flash / 43,676 B RAM on the right. The left `screen_widget` is
+24,952 B, including its single 24,192-byte canvas and live memory snapshot.
+Persistent memory is central-only; its five slots, capture state, held-key
+guards, work items, queue, and 2 KiB playback stack account for about 6 KiB of
+static RAM.

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -13,13 +14,11 @@
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/reboot.h>
-
-#include <dt-bindings/zmk/reset.h>
-
 #include <zmk/event_manager.h>
 #include <zmk/events/usb_conn_state_changed.h>
 #include <zmk/usb.h>
+
+#include "toucan_bootloader.h"
 
 LOG_MODULE_REGISTER(toucan_usb_bootloader_touch, CONFIG_ZMK_LOG_LEVEL);
 
@@ -114,7 +113,13 @@ static void touch_poll(struct k_work *work) {
     case TOUCH_SECOND_DTR_HIGH:
         if (baud_rate == TOUCH_SECOND_BAUD_RATE && dtr == 0U) {
             LOG_INF("guarded 1200/2400-baud touch received; entering UF2 bootloader");
-            sys_reboot(RST_UF2);
+            int err = toucan_bootloader_request();
+            if (err < 0 && err != -EALREADY) {
+                LOG_ERR("Unable to queue UF2 reboot (%d)", err);
+                reset_touch();
+            } else {
+                block_touch();
+            }
         } else if (baud_rate != TOUCH_SECOND_BAUD_RATE) {
             block_touch();
         }

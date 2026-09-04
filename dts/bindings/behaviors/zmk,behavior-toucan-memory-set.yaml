@@ -1,0 +1,5 @@
+description: Begin recording a Toucan memory slot
+
+compatible: "zmk,behavior-toucan-memory-set"
+
+include: one_param.yaml

@@ -16,8 +16,8 @@
 #define TOUCAN_EDIT 4
 #define TOUCAN_APP 5
 #define TOUCAN_MOUSE 6
-#define TOUCAN_BT 7
-#define TOUCAN_SYS 8
+#define TOUCAN_SYS 7
+#define TOUCAN_FN 8
 #define TOUCAN_DANGER 9
 
 #endif /* TOUCAN_LAYERS_H */
