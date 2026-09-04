@@ -89,7 +89,6 @@ Run `make help` for all development targets. In particular:
 
 # Customizations
 
-- **Fresh-session continuation handoff**: [docs/session-handoff.md](docs/session-handoff.md)
 - **Keymap and layers**: [config/toucan.keymap](config/toucan.keymap)
 - **Implemented Moonlander-derived layout and controls**: [docs/toucan-moonlander-layout.md](docs/toucan-moonlander-layout.md)
 - **Combos/chording**: [config/toucan_combos.dtsi](config/toucan_combos.dtsi)
@@ -116,20 +115,24 @@ restarts restore the previous estimate when it is consistent with the newly
 measured voltage. The normal ZMK report interval is 60 seconds, so changes are
 intentionally gradual.
 
-The `320 mAh` rating affects runtime, not the voltage-to-percentage curve. If a
-half has a repeatable ADC bias, add its calibration in
-[`config/toucan_left.conf`](config/toucan_left.conf) or
-[`config/toucan_right.conf`](config/toucan_right.conf):
+The `320 mAh` rating affects runtime, not the voltage-to-percentage curve. The
+current per-half calibration maps each observed full-charge raw median to the
+curve's 4.2 V endpoint:
 
 ```ini
-CONFIG_TOUCAN_BATTERY_VOLTAGE_OFFSET_MV=-25
+# config/toucan_left.conf: 4200 - 4121
+CONFIG_TOUCAN_BATTERY_VOLTAGE_OFFSET_MV=79
+
+# config/toucan_right.conf: 4200 - 4097
+CONFIG_TOUCAN_BATTERY_VOLTAGE_OFFSET_MV=103
 ```
 
-The value is signed millivolts: use actual battery voltage minus reported raw
-voltage. For example, 3.95 V at the battery and 3.98 V from the ADC means
-`-30`. Each half can have a different offset. Calibration corrects a consistent
-measurement bias; it cannot turn voltage-only estimation into a true
-coulomb-counting fuel gauge.
+The value is signed millivolts and is added before the discharge curve is
+evaluated. These offsets normalize the observed full points; they are not a
+claim that the ADC readings match a multimeter. If a trusted physical voltage
+measurement is later available, use actual battery voltage minus reported raw
+voltage instead. Each half can have a different offset. Calibration cannot turn
+voltage-only estimation into a true coulomb-counting fuel gauge.
 
 ### On-demand voltage readout
 
@@ -139,8 +142,8 @@ currently selected USB or Bluetooth connection. These are the raw, uncalibrated
 readings:
 
 ```text
-left=4124mv
-right=3721mv
+left=4121mv
+right=4097mv
 ```
 
 The behavior is global, so the one key press asks each half for its own recorded
