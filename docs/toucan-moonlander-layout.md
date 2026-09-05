@@ -51,36 +51,45 @@ active. Higher numbered active layers have normal ZMK priority.
 
 ## Hold-tap resolution
 
-Typing-facing hold-taps use a 200 ms tapping term. No `quick-tap-ms` setting is
-currently enabled.
+All typing-facing hold-taps share the balanced flavor, a 200 ms tapping term,
+and a 125 ms prior-idle guard. This includes the base-layer modifier and layer
+taps, both dual-role thumbs, and NAV E. The settings have one source of truth:
+`TOUCAN_TYPING_HOLD_TAP_POLICY` in
+[`config/toucan_behaviors.dtsi`](../config/toucan_behaviors.dtsi).
 
-Q/P, S, D, and C use the balanced flavor with a 125 ms prior-idle guard:
+- If the leader follows another non-modifier keypress within 125 ms, it resolves
+  immediately as its tap action. Holding longer cannot undo this decision.
+- Otherwise, releasing the leader before the target, and before 200 ms, is a
+  typing rollover. An opposite-hand keypress alone no longer selects a hold.
+- Keeping the leader held while pressing and releasing an eligible target
+  selects the hold, without waiting for the full tapping term.
+- Holding the leader alone through 200 ms also selects the hold, unless the
+  prior-idle or thumb quick-tap guard already forced a tap.
 
-- If the leader follows another non-modifier key within 125 ms, it resolves
-  immediately as its printed character.
-- Otherwise, releasing the leader before the target is a typing rollover.
-- Keeping the leader held until after the target is released is a deliberate
-  layer chord.
-- Holding the leader alone past 200 ms selects its layer, unless the prior-idle
-  guard already forced a tap.
+Position filters still limit which targets can select a hold before 200 ms:
 
-The Backspace/Command and Tab/Option thumbs use the same balanced 200 ms and
-125 ms prior-idle policy, without positional filters, so they can modify keys
-on either hand. Both have a 200 ms quick-tap window: tap the key and press it
-again within that window to hold and repeat its tap behavior instead of
-engaging its modifier.
+- Equal/Ctrl, Z/Shift, Quote/Ctrl, Slash/Shift, A/SYM, Semicolon/SYM, and NAV E
+  require an opposite-hand target.
+- S can select CLIP only with D/F, D can select EDIT only with S/F, and C can
+  select APP only with X/V.
+- Q/P and the Backspace/Command and Tab/Option thumbs have no position filter.
 
-Before the tapping term expires, S can select CLIP only with D/F, D can select
-EDIT only with S/F, and C can select APP only with X/V. Their positional
-filters preserve all other same-hand rolls. Q and P can select NAV with any
-target once the balanced/prior-idle rules allow the hold.
+The thumbs alone also have a 200 ms quick-tap window: tap the key and press it
+again within 200 ms of the first press to hold and repeat its tap behavior
+instead of engaging its modifier.
 
-Equal/Ctrl, Z/Shift, Quote/Ctrl, Slash/Shift, A/SYM, and Semicolon/SYM retain
-the Achordion-style policy inherited from the Moonlander:
+For example, pressing A, pressing N, releasing A, then releasing N within
+200 ms types `an`, not `-`. The same release order with Quote and S types `'s`,
+not Ctrl+S. To deliberately chord, pause at least 125 ms after the previous
+non-modifier keypress, then hold the leader while tapping and releasing the
+target. Fast typing that releases the target first after a pause can still
+select a hold; balanced resolution cannot distinguish that sequence from an
+intentional chord.
 
-- An opposite-hand interrupt selects the hold immediately.
-- A same-hand interrupt before 200 ms selects the printed tap.
-- Holding the key alone through 200 ms still selects the hold.
+Action-only hold-taps are deliberately excluded: CLIP D remains tap-preferred
+with a 200 ms hold to cut, memory slots retain their 400 ms replacement hold,
+and Bluetooth clear retains its two-second safety hold. These actions must
+not become holds merely because another key was tapped.
 
 ## Symbol layer (`SYM`)
 

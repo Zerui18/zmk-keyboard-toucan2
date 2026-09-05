@@ -2,6 +2,14 @@
 
 #include <toucan_layers.dtsi>
 
+/* One rollover policy for all typing-facing hold-taps, including NAV E.
+ * Position filters and thumb repeat are configured per behavior below.
+ * Copy/cut, memory replacement, and Bluetooth clear keep deliberate-hold rules. */
+#define TOUCAN_TYPING_HOLD_TAP_POLICY                                                           \
+    flavor = "balanced";                                                                       \
+    tapping-term-ms = <200>;                                                                    \
+    require-prior-idle-ms = <125>;
+
 /* Physical positions on the opposite side of each hand's tap-hold keys. */
 #define TOUCAN_LEFT_POSITIONS                                                                   \
     0 1 2 3 4 5 12 13 14 15 16 17 24 25 26 27 28 29 36 37 38
@@ -50,12 +58,11 @@
             bindings = <&memory_set>, <&memory_use>;
         };
 
-        /* Achordion-style opposite-hand modifier taps. */
+        /* Opposite-hand modifier chords, with the shared typing-roll guard. */
         left_mod_tap: lmtht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "hold-preferred";
-            tapping-term-ms = <200>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&kp>, <&kp>;
             hold-trigger-key-positions = <TOUCAN_RIGHT_POSITIONS>;
         };
@@ -63,8 +70,7 @@
         right_mod_tap: rmtht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "hold-preferred";
-            tapping-term-ms = <200>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&kp>, <&kp>;
             hold-trigger-key-positions = <TOUCAN_LEFT_POSITIONS>;
         };
@@ -73,10 +79,8 @@
         thumb_cmd_tap: thumbcmd {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "balanced";
-            tapping-term-ms = <200>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             quick-tap-ms = <200>;
-            require-prior-idle-ms = <125>;
             bindings = <&cmd_key>, <&kp>;
         };
 
@@ -84,10 +88,8 @@
         thumb_mod_tap: thumbmt {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "balanced";
-            tapping-term-ms = <200>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             quick-tap-ms = <200>;
-            require-prior-idle-ms = <125>;
             bindings = <&kp>, <&kp>;
         };
 
@@ -95,8 +97,7 @@
         left_layer_tap: lltht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "hold-preferred";
-            tapping-term-ms = <200>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&mo>, <&kp>;
             hold-trigger-key-positions = <TOUCAN_RIGHT_POSITIONS>;
         };
@@ -104,8 +105,7 @@
         right_layer_tap: rltht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "hold-preferred";
-            tapping-term-ms = <200>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&mo>, <&kp>;
             hold-trigger-key-positions = <TOUCAN_LEFT_POSITIONS>;
         };
@@ -114,9 +114,7 @@
         any_layer_tap: altht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "balanced";
-            tapping-term-ms = <200>;
-            require-prior-idle-ms = <125>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&mo>, <&kp>;
         };
 
@@ -125,9 +123,7 @@
         s_layer_tap: sltht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "balanced";
-            tapping-term-ms = <200>;
-            require-prior-idle-ms = <125>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&mo>, <&kp>;
             hold-trigger-key-positions = <15 16>;
         };
@@ -135,9 +131,7 @@
         d_layer_tap: dltht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "balanced";
-            tapping-term-ms = <200>;
-            require-prior-idle-ms = <125>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&mo>, <&kp>;
             hold-trigger-key-positions = <14 16>;
         };
@@ -146,9 +140,7 @@
         c_layer_tap: cltht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "balanced";
-            tapping-term-ms = <200>;
-            require-prior-idle-ms = <125>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&app_switch_layer>, <&kp>;
             hold-trigger-key-positions = <26 28>;
         };
@@ -157,8 +149,7 @@
         nav_ctrl_shift: navcs {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
-            flavor = "hold-preferred";
-            tapping-term-ms = <200>;
+            TOUCAN_TYPING_HOLD_TAP_POLICY
             bindings = <&ctrl_shift_hold>, <&ctrl_shift_space>;
             hold-trigger-key-positions = <TOUCAN_RIGHT_POSITIONS>;
         };
@@ -219,5 +210,6 @@
     };
 };
 
+#undef TOUCAN_TYPING_HOLD_TAP_POLICY
 #undef TOUCAN_LEFT_POSITIONS
 #undef TOUCAN_RIGHT_POSITIONS
