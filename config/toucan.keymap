@@ -44,10 +44,10 @@
         nav {
             display-name = "NAV";
             bindings = <
-                &trans &trans &kp LA(LC(LEFT)) &nav_ctrl_shift 0 0 &kp APPLY_MODS((MOD_RALT | MOD_RCTL), RIGHT) &trans           &kp LEFT      &kp DOWN &kp UP &kp RIGHT &trans &trans
-                &trans &trans &cmd_key LBKT    &nav_enter_dance    &kp LA(LC(ENTER))                            &cmd_key RBKT    &trans        &trans   &trans &trans    &trans &trans
-                &trans &trans &trans           &trans              &trans                                       &trans           &trans        &trans   &trans &trans    &trans &trans
-                                               &trans              &trans                                       &trans           &cmd_key RGUI &kp RALT &trans
+                &trans &trans &kp LA(LC(LEFT)) &kp LA(LC(ENTER)) &kp APPLY_MODS((MOD_RALT | MOD_RCTL), RIGHT) &trans           &kp LEFT      &kp DOWN &kp UP &kp RIGHT &trans &trans
+                &trans &trans &cmd_key LBKT    &nav_enter_dance  &nav_ctrl_shift 0 0                          &cmd_key RBKT    &trans        &trans   &trans &trans    &trans &trans
+                &trans &trans &trans           &trans            &trans                                       &trans           &trans        &trans   &trans &trans    &trans &trans
+                                               &trans            &trans                                       &trans           &cmd_key RGUI &kp RALT &trans
             >;
         };
 

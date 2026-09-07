@@ -2,7 +2,7 @@
 
 #include <toucan_layers.dtsi>
 
-/* One rollover policy for all typing-facing hold-taps, including NAV E.
+/* One rollover policy for all typing-facing hold-taps, including NAV F.
  * Position filters and thumb repeat are configured per behavior below.
  * Copy/cut, memory replacement, and Bluetooth clear keep deliberate-hold rules. */
 #define TOUCAN_TYPING_HOLD_TAP_POLICY                                                           \
@@ -145,7 +145,7 @@
             hold-trigger-key-positions = <26 28>;
         };
 
-        /* NAV E: hold Ctrl+Shift; tap Ctrl+Shift+Space. */
+        /* NAV F: hold Ctrl+Shift; tap Ctrl+Shift+Space. */
         nav_ctrl_shift: navcs {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;

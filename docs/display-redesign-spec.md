@@ -420,8 +420,8 @@ ___  %  |  [  ]  +        -  7  8  9  ~  ___
 ### Navigation and editing
 
 ```text
-___ ___ Alt+Ctrl+Left Ctrl+Shift/Space RAlt+RCtrl+Right ___   Left Down Up Right ___ ___
-___ ___ Cmd+[         Shift/GUI+Enter  Alt+Ctrl+Enter    Cmd+] ___  ___  ___ ___   ___ ___
+___ ___ Alt+Ctrl+Left Alt+Ctrl+Enter  RAlt+RCtrl+Right ___   Left Down Up Right ___ ___
+___ ___ Cmd+[         Shift/GUI+Enter Ctrl+Shift/Space Cmd+] ___  ___  ___ ___   ___ ___
 ___ ___ ___           ___              ___               ___   ___  ___  ___ ___   ___ ___
 
                            ___ ___ ___        Cmd Alt ___
@@ -456,13 +456,13 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
 ### Chording policy and combos
 
 - All typing-facing hold-taps, including Ctrl, Shift, `A/SYM`, `;/SYM`,
-  `Q/P`, `S`, `D`, `C`, the dual-role thumbs, and NAV E, share balanced
+  `Q/P`, `S`, `D`, `C`, the dual-role thumbs, and NAV F, share balanced
   resolution, a 200 ms tapping term, and a 125 ms prior-idle guard.
 - Recent typing forces a tap. Otherwise, rolls type normally when the leader
   is released first before 200 ms; deliberate chords release the target first
   while continuing to hold the leader. Holding the leader alone through 200 ms
   also selects a hold if no typing or quick-tap guard has forced a tap.
-- Ctrl, Shift, `A/SYM`, `;/SYM`, and NAV E require an opposite-hand target for
+- Ctrl, Shift, `A/SYM`, `;/SYM`, and NAV F require an opposite-hand target for
   early holds; an opposite-hand keypress alone no longer selects a hold.
 - `S` can select CLP only for `D`/`F`, `D` can select EDT only for `S`/`F`, and
   `C` can select APP only for `X`/`V`.

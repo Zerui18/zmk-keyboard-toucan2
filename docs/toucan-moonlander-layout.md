@@ -53,7 +53,7 @@ active. Higher numbered active layers have normal ZMK priority.
 
 All typing-facing hold-taps share the balanced flavor, a 200 ms tapping term,
 and a 125 ms prior-idle guard. This includes the base-layer modifier and layer
-taps, both dual-role thumbs, and NAV E. The settings have one source of truth:
+taps, both dual-role thumbs, and NAV F. The settings have one source of truth:
 `TOUCAN_TYPING_HOLD_TAP_POLICY` in
 [`config/toucan_behaviors.dtsi`](../config/toucan_behaviors.dtsi).
 
@@ -68,7 +68,7 @@ taps, both dual-role thumbs, and NAV E. The settings have one source of truth:
 
 Position filters still limit which targets can select a hold before 200 ms:
 
-- Equal/Ctrl, Z/Shift, Quote/Ctrl, Slash/Shift, A/SYM, Semicolon/SYM, and NAV E
+- Equal/Ctrl, Z/Shift, Quote/Ctrl, Slash/Shift, A/SYM, Semicolon/SYM, and NAV F
   require an opposite-hand target.
 - S can select CLIP only with D/F, D can select EDIT only with S/F, and C can
   select APP only with X/V.
@@ -108,14 +108,15 @@ dedicated bindings.
 ## Navigation layer (`NAV`)
 
 ```text
-___  ___  Alt+Ctrl+Left  Ctrl+Shift/Space  RAlt+RCtrl+Right  ___ | Left  Down  Up  Right  ___  ___
-___  ___  Cmd/Ctrl+[     Shift/GUI+Enter   Alt+Ctrl+Enter     Cmd/Ctrl+] | ___ ___ ___ ___ ___ ___
+___  ___  Alt+Ctrl+Left  Alt+Ctrl+Enter   RAlt+RCtrl+Right  ___ | Left  Down  Up  Right  ___  ___
+___  ___  Cmd/Ctrl+[     Shift/GUI+Enter  Ctrl+Shift/Space  Cmd/Ctrl+] | ___ ___ ___ ___ ___ ___
 ___  ___  ___            ___               ___                ___ | ___   ___   ___ ___    ___  ___
 
                                                     ___  ___  ___ | Cmd/Ctrl  Alt  ___
 ```
 
-The E position is itself a hold-tap: tapping sends Ctrl+Shift+Space, while
+W/E/R group Alt+Ctrl+Left, Alt+Ctrl+Enter, and RAlt+RCtrl+Right together.
+The F position is itself a hold-tap: tapping sends Ctrl+Shift+Space, while
 holding it with an opposite-hand key holds Ctrl+Shift. The D position is a tap
 dance: one tap sends Shift+Enter and two taps send GUI+Enter. That double-tap
 uses GUI directly and is not changed by the macOS/Windows mode.
