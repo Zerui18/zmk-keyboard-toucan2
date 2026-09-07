@@ -594,7 +594,9 @@ dashboard transfers zero bytes.
 - UF2 appears before either the DNG bootloader key or guarded 1200/2400-baud
   host request reboots the left half. The screenless right half has no delay.
 - MEM SET shows the selected slot, SEQ/TEXT mode, live private capture, and a
-  530 ms caret blink.
+  530 ms caret blink. Both modes preserve case in their previews, using the
+  STATUS font's lowercase extension with four-row bodies and two-row descenders.
+  Original capitals remain unchanged; see [memory-font.md](memory-font.md).
 
 Page changes are seven top-down row reveals at 83 ms per frame. Each row is
 invalidated once by the transition itself, for one 3,362-byte full-frame cost
@@ -620,16 +622,55 @@ During capture the physical SYS thumb is reserved as follows:
 - 600 ms hold saves a non-empty capture and wipes the capture buffer.
 
 SEQ stores up to 64 resolved press/release actions and replays their order,
-with final safety releases for any key whose release could not fit. TEXT stores
-up to 64 literal characters and compensates for the host Caps Lock state during
-capture and playback. Escape has no special control meaning and can be stored
-in SEQ. MEM_CLR held with a slot tap clears that one persisted slot.
+with final safety releases for any key still held when saved. During capture,
+bare `ctrl`, `shift`, `alt`, and `cmd` names collapse immediately into modifier
+icons and combine on the next non-modifier key. Names are case-insensitive and
+reserved even within words; TEXT leaves them literal. See the
+[SEQ shorthand rules](toucan-moonlander-layout.md#seq-modifier-name-shorthand)
+for examples and input boundaries.
+
+SEQ retains up to 1,024 source events for live recompilation. Exceeding that
+input limit or the 64-action output limit shows `FULL` in the MEM SET footer
+and blocks saving rather than replacing a slot with truncated output.
+Completing a partial name can bring provisional output back within the action
+limit; cancellation always remains available.
+
+TEXT stores up to 64 literal characters and compensates for the host Caps Lock
+state during capture and playback. Escape has no special control meaning and
+can be stored in SEQ. MEM_CLR held with a slot tap clears that one persisted slot.
+
+SEQ preview formatting consumes releases as well as presses to track held
+modifiers. It shares TEXT's US-layout character decoder, starting from a
+capture-local Caps Lock snapshot and applying recorded Caps Lock presses.
+Character labels use the original input modifiers; modifier icons use the
+compiled shortcut modifiers in the names' entry order, before and after a
+target is entered. `shiftcmd4` shows Shift + Cmd + `4`; `cmdshift4` shows
+Cmd + Shift + `4`. Repeated names retain their first position, and physically
+entered Shift/Caps Lock still controls literal case. Chord playback is unchanged.
+The label and icon-order metadata is capture-only. The persisted event format is
+unchanged; SEQ still depends on the host's layout and lock state during playback.
 
 The memory subsystem exists only on the central/left build. Both its keycode
 listener and SYS-thumb position listener link before ZMK's HID/keymap listeners;
 keys already held before capture are still allowed to release at the host, and
 keys swallowed by a completed or cancelled capture stay swallowed through
 their releases.
+
+Memory display notifications carry only the slot/save metadata through
+`ZMK_DISPLAY_WIDGET_LISTENER`. That macro copies its state by value on both
+the event and display workqueues, so the full memory snapshot must not be part
+of its state. The display callback instead reads the current snapshot directly
+into the widget's existing storage. This also keeps memory-mutex acquisition
+out of the display listener's notification-state lock.
+
+The display workqueue has a 2 KiB stack. Passing the snapshot by value made
+the memory display callback alone consume 1,856 bytes before entering the
+renderer, risking stack exhaustion during capture and page transitions.
+The direct-storage version uses a 32-byte callback frame in the verified ARM
+build. GCC builds now compile `screen.c` with `-Werror=stack-usage=256`, so a
+large callback/frame regression fails the actual firmware build. This bounds
+individual functions, not the whole call chain; physical capture/exit stress
+testing is still part of acceptance.
 
 The right half relays USB-power presence using private input-split code
 `0x7F02`, separate from packed trackpad X/Y code `0x7F01`. No display update is

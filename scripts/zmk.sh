@@ -32,6 +32,7 @@ Commands:
   install-both          Build, reboot, and flash both USB-connected halves
   flash-both            Reboot and flash both halves with existing images
   usb-check             Verify both runtime USB ports are available
+  test-memory           Test memory case, SEQ names, font, and capture/playback
   update                Update all West-managed dependencies
   clean                 Remove generated build output
   doctor                Check the local development environment
@@ -277,6 +278,10 @@ main() {
             ;;
         usb-check)
             run_usb_tool check
+            ;;
+        test-memory)
+            require_docker
+            run_container test-memory
             ;;
         clean)
             require_docker

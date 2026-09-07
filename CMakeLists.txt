@@ -36,6 +36,8 @@ target_sources_ifdef(CONFIG_TOUCAN_PLATFORM_MODE app PRIVATE
 
 target_sources_ifdef(CONFIG_TOUCAN_MEMORY app PRIVATE
   src/toucan_memory.c
+  src/toucan_memory_sequence.c
+  src/toucan_key_text.c
 )
 
 target_sources_ifdef(CONFIG_TOUCAN_SOFT_POWER app PRIVATE

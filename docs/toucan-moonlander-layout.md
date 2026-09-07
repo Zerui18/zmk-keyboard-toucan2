@@ -189,8 +189,9 @@ For a memory slot:
   never sent to the host.
 - Hold MEM_CLR and tap a slot to erase only that slot.
 
-SEQ stores an arbitrary resolved press/release stream, including chords,
-modifiers, Enter, and Escape. TEXT stores literal text up to 64 characters.
+SEQ stores up to 64 resolved press/release actions, including chords,
+modifiers, Enter, and Escape, with the typed modifier-name shorthand below.
+TEXT stores literal text up to 64 characters and never interprets modifier names.
 While capture is active, the physical SYS thumb becomes the control key:
 
 - Single-tap SYS to switch SEQ/TEXT, but only while the capture is empty.
@@ -201,6 +202,50 @@ While capture is active, the physical SYS thumb becomes the control key:
 Slots and their `sequence`/`text` type survive resets in Zephyr settings. Slot
 contents are shown only on the MEM SET capture page; the dashboard exposes only
 occupancy, with a small prime mark distinguishing sequence slots.
+
+Both capture previews distinguish uppercase and lowercase. TEXT displays its
+literal stored characters; SEQ tracks held Shift, action modifiers, and Caps
+Lock while formatting key labels. SEQ replays the resulting key events,
+whereas TEXT compensates for host Caps Lock to preserve literal case. See the
+[memory font design](memory-font.md) for glyph metrics and validation.
+
+### SEQ modifier-name shorthand
+
+Type `ctrl`, `shift`, `alt`, or `cmd` in SEQ to replace the completed name with
+its modifier icon immediately, without a delimiter or waiting for save. Names
+are case-insensitive; ordinary letters retain their original case. Enter names
+and the target consecutively, without spaces: a space is a recorded key, not
+a separator.
+
+- Names combine and apply to the next non-modifier key: `ctrlshiftp` records
+  Ctrl+Shift+P, `cmdc` records GUI+C, and `ctrlsctrlc` records Ctrl+S then Ctrl+C.
+  `cmd` always means left GUI, regardless of the macOS/Windows mode.
+- Named modifier icons stay in entry order, both while the prefix is pending
+  and after the target key is entered. `shiftcmd4` shows Shift then Cmd then `4`;
+  `cmdshift4` shows Cmd then Shift then `4`. Both replay the same chord.
+  Repeated names keep their first position without adding a duplicate icon.
+- Named modifiers affect playback, not the character labels being entered.
+  `shiftcmd4` shows Shift and Cmd icons followed by `4`, not `$`, and replays
+  Shift+GUI+4. While entering `shiftc`, the provisional `c` stays lowercase.
+  Physical Shift, shifted key bindings, and Caps Lock still determine literal
+  case and symbols, so physically typing `$` continues to display `$`.
+- The target can also be Enter, Space, Escape, Backspace, or another non-letter
+  key. The named modifiers accompany that key's press and release, not later
+  key presses. Physical chords remain available.
+- Partial names remain visible as letters. In `ctrlshift`, the provisional
+  Ctrl+S becomes Ctrl+Shift when the final `t` is pressed. Saving names without
+  a target presses the modifiers in entry order and releases them in reverse,
+  never leaving a stuck hold.
+- These short names are reserved even inside words: `shifted` records Shift+E
+  then D. Use TEXT to preserve literal words containing them. A non-letter
+  press or physical modifier change breaks a name; letters already chorded
+  with Ctrl, Alt, or GUI are not interpreted as names.
+
+The capture retains up to 1,024 source events while compiling them to the
+64-action saved sequence. If either limit is exceeded, MEM SET shows `FULL`
+and refuses to save, leaving the previous slot intact. A partial name can
+temporarily exceed the action limit and fit again when completed. Otherwise,
+double-tap SYS to cancel and record a shorter sequence.
 
 ## Function layer (`FN`)
 

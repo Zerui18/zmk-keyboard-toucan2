@@ -167,6 +167,39 @@ main() {
         build)
             build_side "${2:-}"
             ;;
+        test-memory)
+            ensure_workspace false
+            mkdir -p "${BUILD_ROOT}/tests"
+            cc -std=c11 -Wall -Wextra -Werror \
+                -I"${WORKSPACE_DIR}/zmk/app/include" -I"${REPO_DIR}/src" \
+                -I"${REPO_DIR}/boards/shields/nice_view_gem/assets" \
+                "${REPO_DIR}/tests/memory_case.c" "${REPO_DIR}/src/toucan_key_text.c" \
+                -o "${BUILD_ROOT}/tests/memory-case"
+            "${BUILD_ROOT}/tests/memory-case"
+            cc -std=c11 -Wall -Wextra -Werror \
+                -I"${WORKSPACE_DIR}/zmk/app/include" -I"${REPO_DIR}/src" \
+                "${REPO_DIR}/tests/memory_sequence.c" \
+                "${REPO_DIR}/src/toucan_memory_sequence.c" "${REPO_DIR}/src/toucan_key_text.c" \
+                -o "${BUILD_ROOT}/tests/memory-sequence"
+            "${BUILD_ROOT}/tests/memory-sequence"
+            python3 "${REPO_DIR}/tests/test_memory_font.py"
+            west build -s "${WORKSPACE_DIR}/zmk/app" \
+                -d "${BUILD_ROOT}/tests/memory-capture" -b native_posix_64 -- \
+                -DZephyr_DIR=/workspace/zephyr/share/zephyr-package/cmake \
+                "-DZMK_CONFIG=${REPO_DIR}/tests/memory_capture" \
+                "-DZMK_EXTRA_MODULES=${REPO_DIR};${REPO_DIR}/tests/memory_capture" \
+                -DCONFIG_ASSERT=y
+            if ! timeout 30 "${BUILD_ROOT}/tests/memory-capture/zephyr/zmk.exe" \
+                >"${BUILD_ROOT}/tests/memory-capture/replay.log" 2>&1; then
+                cat "${BUILD_ROOT}/tests/memory-capture/replay.log"
+                exit 1
+            fi
+            if ! grep 'PASS: private TEXT/SEQ capture' \
+                "${BUILD_ROOT}/tests/memory-capture/replay.log"; then
+                cat "${BUILD_ROOT}/tests/memory-capture/replay.log"
+                exit 1
+            fi
+            ;;
         clean)
             clean_outputs
             ;;

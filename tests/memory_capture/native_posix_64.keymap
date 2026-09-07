@@ -1,0 +1,97 @@
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/kscan_mock.h>
+
+/ {
+    behaviors {
+        mem_set: memset {
+            compatible = "zmk,behavior-toucan-memory-set";
+            #binding-cells = <1>;
+        };
+        mem_use: memuse {
+            compatible = "zmk,behavior-toucan-memory-use";
+            #binding-cells = <1>;
+        };
+    };
+
+    keymap {
+        compatible = "zmk,keymap";
+        base {
+            bindings = <
+                &mem_set 0 &kp A &kp B &kp C &kp LSHFT &kp RSHFT &kp CAPS &mem_use 0 &mem_use 1 &mem_set 1 &kp F12 &none
+                &kp T &kp R &kp L &kp S &kp H &kp I &kp F &kp P &mem_set 2 &mem_use 2 &mem_set 3 &mem_use 3
+                &kp Z &kp M &kp D &kp N4 &mem_set 4 &mem_use 4 &none &none &none &none &none &none
+                &none &none &none &none &none &none
+            >;
+        };
+    };
+};
+
+/* a, Shift+A/B, c, Caps+A, Caps+RightShift+A, then restore Caps: "aABcAa". */
+#define MIXED_CASE_EVENTS                                                                      \
+    ZMK_MOCK_PRESS(0,1,10) ZMK_MOCK_RELEASE(0,1,10)                                              \
+    ZMK_MOCK_PRESS(0,4,10)                                                                     \
+    ZMK_MOCK_PRESS(0,1,10) ZMK_MOCK_RELEASE(0,1,10)                                              \
+    ZMK_MOCK_PRESS(0,2,10) ZMK_MOCK_RELEASE(0,2,10)                                              \
+    ZMK_MOCK_RELEASE(0,4,10)                                                                   \
+    ZMK_MOCK_PRESS(0,3,10) ZMK_MOCK_RELEASE(0,3,10)                                              \
+    ZMK_MOCK_PRESS(0,6,10) ZMK_MOCK_RELEASE(0,6,10)                                              \
+    ZMK_MOCK_PRESS(0,1,10) ZMK_MOCK_RELEASE(0,1,10)                                              \
+    ZMK_MOCK_PRESS(0,5,10)                                                                     \
+    ZMK_MOCK_PRESS(0,1,10) ZMK_MOCK_RELEASE(0,1,10)                                              \
+    ZMK_MOCK_RELEASE(0,5,10)                                                                   \
+    ZMK_MOCK_PRESS(0,6,10) ZMK_MOCK_RELEASE(0,6,10)
+
+#define TAP(position) ZMK_MOCK_PRESS(0,position,10) ZMK_MOCK_RELEASE(0,position,10)
+#define CTRL_NAME TAP(3) TAP(12) TAP(13) TAP(14)
+#define SHIFT_NAME TAP(15) TAP(16) TAP(17) TAP(18) TAP(12)
+#define CMD_NAME TAP(3) TAP(25) TAP(26)
+#define Z8 TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24)
+
+&kscan {
+    rows = <1>;
+    columns = <42>;
+    events = <
+        /* Slot 0: enter capture, use the real SYS single tap to select TEXT. */
+        ZMK_MOCK_PRESS(0,0,20) ZMK_MOCK_RELEASE(0,0,100)
+        ZMK_MOCK_PRESS(0,36,20) ZMK_MOCK_RELEASE(0,36,350)
+        MIXED_CASE_EVENTS
+        CTRL_NAME /* TEXT must keep the name literal. */
+        ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
+        ZMK_MOCK_PRESS(0,7,20) ZMK_MOCK_RELEASE(0,7,600)
+
+        /* Slot 1: default SEQ mode; record and replay the same physical keys. */
+        ZMK_MOCK_PRESS(0,9,20) ZMK_MOCK_RELEASE(0,9,100)
+        MIXED_CASE_EVENTS
+        ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
+        ZMK_MOCK_PRESS(0,8,20) ZMK_MOCK_RELEASE(0,8,600)
+
+        /* Slot 2: type ctrlshiftpctrls, without physical modifiers or delimiters. */
+        ZMK_MOCK_PRESS(0,20,20) ZMK_MOCK_RELEASE(0,20,100)
+        CTRL_NAME SHIFT_NAME TAP(19)
+        CTRL_NAME TAP(15)
+        ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
+        ZMK_MOCK_PRESS(0,21,20) ZMK_MOCK_RELEASE(0,21,600)
+
+        /* Overflow cannot be saved. Cancel and start a fresh slot-3 capture. */
+        ZMK_MOCK_PRESS(0,22,20) ZMK_MOCK_RELEASE(0,22,100)
+        Z8 Z8 Z8 Z8 TAP(24)
+        ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
+        ZMK_MOCK_PRESS(0,36,20) ZMK_MOCK_RELEASE(0,36,50)
+        ZMK_MOCK_PRESS(0,36,20) ZMK_MOCK_RELEASE(0,36,350)
+        ZMK_MOCK_PRESS(0,22,20) ZMK_MOCK_RELEASE(0,22,100)
+        CTRL_NAME /* A modifier-only prefix is a balanced Ctrl tap on save. */
+        ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
+        ZMK_MOCK_PRESS(0,23,20) ZMK_MOCK_RELEASE(0,23,600)
+
+        /* Slot 4: keep both entered orders and bare 4 labels; replay identical chords. */
+        ZMK_MOCK_PRESS(0,28,20) ZMK_MOCK_RELEASE(0,28,100)
+        SHIFT_NAME CMD_NAME TAP(27)
+        CMD_NAME SHIFT_NAME TAP(27)
+        ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
+        ZMK_MOCK_PRESS(0,29,20) ZMK_MOCK_RELEASE(0,29,600)
+
+        /* Sentinel asks the assertion listener to verify all complete replays. */
+        ZMK_MOCK_PRESS(0,10,20) ZMK_MOCK_RELEASE(0,10,100)
+    >;
+};

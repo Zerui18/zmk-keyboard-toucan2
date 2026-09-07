@@ -38,8 +38,10 @@
 #include <zmk/split/central.h>
 #include <zmk/usb.h>
 
+#include "../assets/bitmap_font.h"
 #include "screen.h"
 #include "toucan_display_hooks.h"
+#include "toucan_key_text.h"
 #include "toucan_memory.h"
 #include "toucan_platform_mode.h"
 #include "toucan_soft_power.h"
@@ -85,6 +87,9 @@ enum dashboard_band {
 #define MEMORY_FLASH_FRAMES 4
 #define MEMORY_FLASH_FRAME_MS 150
 #define CARET_BLINK_MS 530
+#define CONTENT_LINE_PITCH 18
+#define CONTENT_GLYPH_HEIGHT 16
+#define CONTENT_BOTTOM 148 /* Leave the TEXT counter at y=154 unobstructed. */
 
 #ifndef TOUCAN_FIRMWARE_VERSION
 #define TOUCAN_FIRMWARE_VERSION "0.3"
@@ -94,14 +99,10 @@ enum dashboard_band {
 #define TOUCAN_GIT_SHA "UNKNOWN"
 #endif
 
-struct bitmap_glyph {
-    char code;
-    uint8_t width;
-    uint8_t height;
-    const char *pixels;
-};
-
-/* 5x6 STATUS font from the display handoff. */
+/* STATUS: original 5x6 capitals, extended for literal memory content.
+ * Lowercase has a four-row x-height (rows 2..5), cap-height ascenders,
+ * and two descender rows (6..7). Most bodies are four pixels wide;
+ * m/w retain five, and i/l remain narrow. All strokes stay on the 1-bit grid. */
 static const struct bitmap_glyph status_glyphs[] = {
     {'0', 5, 6, ".XXX." "X...X" "X...X" "X...X" "X...X" ".XXX."},
     {'1', 5, 6, "..X.." ".XX.." "..X.." "..X.." "..X.." ".XXX."},
@@ -139,6 +140,32 @@ static const struct bitmap_glyph status_glyphs[] = {
     {'X', 5, 6, "X...X" ".X.X." "..X.." "..X.." ".X.X." "X...X"},
     {'Y', 5, 6, "X...X" ".X.X." "..X.." "..X.." "..X.." "..X.."},
     {'Z', 5, 6, "XXXXX" "....X" "...X." "..X.." ".X..." "XXXXX"},
+    {'a', 4, 6, "...." "...." ".XXX" "X..X" "X..X" ".XXX"},
+    {'b', 4, 6, "X..." "X..." "XXX." "X..X" "X..X" "XXX."},
+    {'c', 4, 6, "...." "...." ".XXX" "X..." "X..." ".XXX"},
+    {'d', 4, 6, "...X" "...X" ".XXX" "X..X" "X..X" ".XXX"},
+    {'e', 4, 6, "...." "...." ".XX." "X..X" "XXX." ".XXX"},
+    {'f', 4, 6, "..XX" ".X.." "XXX." ".X.." ".X.." ".X.."},
+    {'g', 4, 8, "...." "...." ".XXX" "X..X" "X..X" ".XXX" "...X" ".XX."},
+    {'h', 4, 6, "X..." "X..." "XXX." "X..X" "X..X" "X..X"},
+    {'i', 1, 6, "X" "." "X" "X" "X" "X"},
+    {'j', 3, 8, "..X" "..." ".XX" "..X" "..X" "..X" "X.X" ".X."},
+    {'k', 4, 6, "X..." "X..." "X..X" "X.X." "XX.." "X..X"},
+    {'l', 3, 6, "XX." ".X." ".X." ".X." ".X." ".XX"},
+    {'m', 5, 6, "....." "....." "XX.X." "X.X.X" "X.X.X" "X.X.X"},
+    {'n', 4, 6, "...." "...." "XXX." "X..X" "X..X" "X..X"},
+    {'o', 4, 6, "...." "...." ".XX." "X..X" "X..X" ".XX."},
+    {'p', 4, 8, "...." "...." "XXX." "X..X" "X..X" "XXX." "X..." "X..."},
+    {'q', 4, 8, "...." "...." ".XXX" "X..X" "X..X" ".XXX" "...X" "...X"},
+    {'r', 3, 6, "..." "..." "X.X" "XX." "X.." "X.."},
+    {'s', 4, 6, "...." "...." ".XXX" "XX.." "..XX" "XXX."},
+    {'t', 3, 6, "..." ".X." "XXX" ".X." ".X." ".XX"},
+    {'u', 4, 6, "...." "...." "X..X" "X..X" "X..X" ".XXX"},
+    {'v', 3, 6, "..." "..." "X.X" "X.X" "X.X" ".X."},
+    {'w', 5, 6, "....." "....." "X...X" "X.X.X" "X.X.X" ".X.X."},
+    {'x', 3, 6, "..." "..." "X.X" ".X." ".X." "X.X"},
+    {'y', 4, 8, "...." "...." "X..X" "X..X" "X..X" ".XXX" "...X" ".XX."},
+    {'z', 4, 6, "...." "...." "XXXX" "..X." ".X.." "XXXX"},
     {'!', 1, 6, "X" "X" "X" "X" "." "X"},
     {'?', 4, 6, "XXX." "...X" "..X." "..X." "...." "..X."},
     {'+', 5, 6, "..X.." "..X.." "XXXXX" "..X.." "..X.." "....."},
@@ -148,6 +175,30 @@ static const struct bitmap_glyph status_glyphs[] = {
     {'/', 5, 6, "....X" "...X." "..X.." ".X..." "X...." "....."},
     {':', 1, 6, "." "X" "." "." "X" "."},
     {'*', 2, 6, ".." "XX" "XX" ".." ".." ".."},
+    /* Complete printable ASCII so decoded TEXT/SEQ punctuation stays literal. */
+    {'"', 3, 6, "X.X" "X.X" "..." "..." "..." "..."},
+    {'#', 5, 6, ".X.X." "XXXXX" ".X.X." "XXXXX" ".X.X." "....."},
+    {'$', 5, 6, "..X.." ".XXXX" "X.X.." ".XXX." "..X.X" "XXXX."},
+    {'&', 5, 6, ".XX.." "X..X." ".XX.." "X.X.X" "X..X." ".XX.X"},
+    {'\'', 1, 6, "X" "X" "." "." "." "."},
+    {'(', 3, 6, "..X" ".X." "X.." "X.." ".X." "..X"},
+    {')', 3, 6, "X.." ".X." "..X" "..X" ".X." "X.."},
+    {',', 2, 7, ".." ".." ".." ".." ".." ".X" "X."},
+    {';', 2, 7, ".." ".X" ".." ".." ".." ".X" "X."},
+    {'<', 4, 6, "...." "...X" ".XX." "X..." ".XX." "...X"},
+    {'=', 4, 6, "...." "XXXX" "...." "XXXX" "...." "...."},
+    {'>', 4, 6, "...." "X..." ".XX." "...X" ".XX." "X..."},
+    {'@', 5, 6, ".XXX." "X...X" "X.XXX" "X.X.X" "X.XX." ".XXXX"},
+    {'[', 3, 6, "XXX" "X.." "X.." "X.." "X.." "XXX"},
+    {'\\', 5, 6, "X...." ".X..." "..X.." "...X." "....X" "....."},
+    {']', 3, 6, "XXX" "..X" "..X" "..X" "..X" "XXX"},
+    {'^', 5, 6, "..X.." ".X.X." "X...X" "....." "....." "....."},
+    {'_', 5, 7, "....." "....." "....." "....." "....." "....." "XXXXX"},
+    {'`', 2, 6, "X." ".X" ".." ".." ".." ".."},
+    {'{', 3, 6, ".XX" ".X." "X.." "X.." ".X." ".XX"},
+    {'|', 1, 6, "X" "X" "X" "X" "X" "X"},
+    {'}', 3, 6, "XX." ".X." "..X" "..X" ".X." "XX."},
+    {'~', 5, 6, "....." "....." ".X..X" "X.XX." "....." "....."},
 };
 
 /* 4x5 LAYER font from the display handoff, plus digits for fallback L<n>. */
@@ -321,27 +372,6 @@ static void clear_rows(struct zmk_widget_screen *widget, int y, int height) {
 
 static void clear_framebuffer(struct zmk_widget_screen *widget) {
     clear_rows(widget, 0, SCREEN_HEIGHT);
-}
-
-static const struct bitmap_glyph *find_glyph(const struct bitmap_glyph *glyphs,
-                                              size_t glyph_count, char code) {
-    if (code >= 'a' && code <= 'z') {
-        code = (char)(code - 'a' + 'A');
-    }
-
-    for (size_t i = 0; i < glyph_count; i++) {
-        if (glyphs[i].code == code) {
-            return &glyphs[i];
-        }
-    }
-
-    for (size_t i = 0; i < glyph_count; i++) {
-        if (glyphs[i].code == '?') {
-            return &glyphs[i];
-        }
-    }
-
-    return NULL;
 }
 
 static void draw_bitmap(struct zmk_widget_screen *widget, int x, int y,
@@ -766,9 +796,9 @@ static size_t limited_text_length(const char *text, size_t capacity) {
 static bool content_wrap(struct content_cursor *cursor, int width) {
     if (cursor->x + width > SCREEN_WIDTH - CANVAS_PADDING) {
         cursor->x = CANVAS_PADDING;
-        cursor->y += 18;
+        cursor->y += CONTENT_LINE_PITCH;
     }
-    if (cursor->y > 146) {
+    if (cursor->y + CONTENT_GLYPH_HEIGHT > CONTENT_BOTTOM) {
         cursor->clipped = true;
     }
     return !cursor->clipped;
@@ -779,8 +809,8 @@ static void draw_content_text(struct zmk_widget_screen *widget, struct content_c
     for (const char *character = text; *character != '\0' && !cursor->clipped; character++) {
         if (*character == '\n') {
             cursor->x = CANVAS_PADDING;
-            cursor->y += 18;
-            cursor->clipped = cursor->y > 146;
+            cursor->y += CONTENT_LINE_PITCH;
+            (void)content_wrap(cursor, 0);
             continue;
         }
         if (*character == '\t') {
@@ -824,38 +854,15 @@ static void draw_implicit_modifier_icons(struct zmk_widget_screen *widget,
     }
 }
 
-static bool sequence_key_label(const struct toucan_memory_sequence_action *action, char *label,
-                               size_t label_size) {
+static void sequence_key_label(const struct toucan_memory_sequence_action *action,
+                               bool has_character, char character, char *label, size_t label_size) {
     if (action->usage_page != HID_USAGE_KEY) {
         snprintf(label, label_size, "?");
-        return true;
-    }
-
-    uint16_t keycode = action->keycode;
-    bool shifted = ((action->implicit_modifiers | action->explicit_modifiers) &
-                    (MOD_LSFT | MOD_RSFT)) != 0U;
-    if (keycode >= HID_USAGE_KEY_KEYBOARD_A && keycode <= HID_USAGE_KEY_KEYBOARD_Z) {
-        label[0] = (char)('A' + keycode - HID_USAGE_KEY_KEYBOARD_A);
-        label[1] = '\0';
-        return true;
-    }
-    if (keycode >= HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION &&
-        keycode <= HID_USAGE_KEY_KEYBOARD_9_AND_LEFT_PARENTHESIS) {
-        static const char normal[] = "123456789";
-        static const char shifted_chars[] = "!@#$%^&*(";
-        size_t index = keycode - HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION;
-        label[0] = shifted ? shifted_chars[index] : normal[index];
-        label[1] = '\0';
-        return true;
-    }
-    if (keycode == HID_USAGE_KEY_KEYBOARD_0_AND_RIGHT_PARENTHESIS) {
-        label[0] = shifted ? ')' : '0';
-        label[1] = '\0';
-        return true;
+        return;
     }
 
     const char *name = NULL;
-    switch (keycode) {
+    switch (action->keycode) {
     case HID_USAGE_KEY_KEYBOARD_RETURN_ENTER:
         name = "ENT";
         break;
@@ -874,19 +881,35 @@ static bool sequence_key_label(const struct toucan_memory_sequence_action *actio
     case HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD:
         name = "DEL";
         break;
+    case HID_USAGE_KEY_KEYBOARD_CAPS_LOCK:
+        name = "CAP";
+        break;
     default:
+        if (has_character) {
+            label[0] = character;
+            label[1] = '\0';
+            return;
+        }
         name = "?";
         break;
     }
     snprintf(label, label_size, "%s", name);
-    return true;
 }
 
 static void draw_sequence_content(struct zmk_widget_screen *widget, struct content_cursor *cursor) {
     const struct toucan_memory_capture_snapshot *capture = &widget->state.memory.capture;
+    struct toucan_key_text_state text_state = {.caps_lock = capture->initial_caps_lock};
 
     for (size_t i = 0; i < capture->sequence_action_count && !cursor->clipped; i++) {
         const struct toucan_memory_sequence_action *action = &capture->sequence[i];
+        const struct toucan_memory_sequence_preview *preview = &capture->sequence_preview[i];
+        char character = '\0';
+        /* Named modifiers decorate the shortcut, not the character being entered.
+         * Keep physical/implicit input Shift and Caps Lock for literal case. */
+        bool has_character =
+            toucan_key_text_apply(&text_state, action->usage_page, action->keycode,
+                                  preview->implicit_modifiers, action->explicit_modifiers,
+                                  action->pressed, &character);
         if (!action->pressed) {
             continue;
         }
@@ -914,13 +937,13 @@ static void draw_sequence_content(struct zmk_widget_screen *widget, struct conte
             continue;
         }
 
-        draw_implicit_modifier_icons(widget, cursor,
-                                     action->implicit_modifiers | action->explicit_modifiers);
-        char label[5];
-        if (sequence_key_label(action, label, sizeof(label))) {
-            draw_content_text(widget, cursor, label);
-            cursor->x += 4;
+        for (size_t j = 0; j < ARRAY_SIZE(preview->modifier_order); j++) {
+            draw_implicit_modifier_icons(widget, cursor, preview->modifier_order[j]);
         }
+        char label[5];
+        sequence_key_label(action, has_character, character, label, sizeof(label));
+        draw_content_text(widget, cursor, label);
+        cursor->x += 4;
     }
 }
 
@@ -944,6 +967,10 @@ static void draw_memory_set_page(struct zmk_widget_screen *widget) {
 
     if (capture->mode == TOUCAN_MEMORY_CAPTURE_SEQUENCE) {
         draw_sequence_content(widget, &cursor);
+        if (capture->sequence_overflow) {
+            width = STATUS_TEXT_WIDTH("FULL", 1);
+            DRAW_STATUS_TEXT(widget, 136 - width, 154, "FULL", 1);
+        }
     } else {
         draw_content_text(widget, &cursor, capture->text);
         char counter[8];
@@ -954,7 +981,7 @@ static void draw_memory_set_page(struct zmk_widget_screen *widget) {
         DRAW_STATUS_TEXT(widget, 136 - width, 154, counter, 1);
     }
 
-    if (widget->animation.caret_visible && !cursor.clipped) {
+    if (widget->animation.caret_visible && content_wrap(&cursor, 5)) {
         fill_rect(widget, cursor.x + 1, cursor.y, 3, 12, true);
     }
 }
@@ -1579,40 +1606,32 @@ ZMK_DISPLAY_WIDGET_LISTENER(toucan_display_platform, struct platform_state, plat
                             platform_get_state);
 ZMK_SUBSCRIPTION(toucan_display_platform, toucan_platform_mode_changed);
 
-struct memory_display_state {
-    struct toucan_memory_snapshot snapshot;
-    int8_t slot;
-    bool saved;
-};
-
-static struct memory_display_state memory_get_state(const zmk_event_t *eh) {
+static struct toucan_memory_state_changed memory_get_state(const zmk_event_t *eh) {
     const struct toucan_memory_state_changed *event =
         eh != NULL ? as_toucan_memory_state_changed(eh) : NULL;
-    struct memory_display_state state = {
-        .slot = event != NULL ? event->slot : -1,
-        .saved = event != NULL && event->saved,
-    };
-    toucan_memory_get_snapshot(&state.snapshot);
-    return state;
+    return event != NULL ? *event : (struct toucan_memory_state_changed){.slot = -1};
 }
 
-static void memory_update_cb(struct memory_display_state state) {
+static void memory_update_cb(struct toucan_memory_state_changed state) {
     struct zmk_widget_screen *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         bool was_capturing = widget->state.memory.capture.active;
-        widget->state.memory = state.snapshot;
+        /* The listener macro copies its state by value on both workqueues.
+         * Carry only the small notification there; fetch the large snapshot
+         * directly into display-owned storage, never onto either thread's stack. */
+        toucan_memory_get_snapshot(&widget->state.memory);
+        bool capturing = widget->state.memory.capture.active;
 
         if (!widget->ready) {
             continue;
         }
 
-        if (!was_capturing && state.snapshot.capture.active) {
+        if (!was_capturing && capturing) {
             start_page_transition(widget, TOUCAN_DISPLAY_PAGE_MEMORY_SET, false);
-        } else if (was_capturing && !state.snapshot.capture.active) {
+        } else if (was_capturing && !capturing) {
             widget->animation.pending_memory_flash_slot = state.saved ? state.slot : -1;
             start_page_transition(widget, TOUCAN_DISPLAY_PAGE_DASHBOARD, false);
-        } else if (state.snapshot.capture.active &&
-                   effective_page(widget) == TOUCAN_DISPLAY_PAGE_MEMORY_SET) {
+        } else if (capturing && effective_page(widget) == TOUCAN_DISPLAY_PAGE_MEMORY_SET) {
             draw_scene(widget, TOUCAN_DISPLAY_PAGE_MEMORY_SET);
             invalidate_rows(widget, 0, SCREEN_HEIGHT);
         } else {
@@ -1626,8 +1645,8 @@ static void memory_update_cb(struct memory_display_state state) {
     }
 }
 
-ZMK_DISPLAY_WIDGET_LISTENER(toucan_display_memory, struct memory_display_state, memory_update_cb,
-                            memory_get_state);
+ZMK_DISPLAY_WIDGET_LISTENER(toucan_display_memory, struct toucan_memory_state_changed,
+                            memory_update_cb, memory_get_state);
 ZMK_SUBSCRIPTION(toucan_display_memory, toucan_memory_state_changed);
 
 static int display_activity_event_handler(const zmk_event_t *eh) {

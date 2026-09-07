@@ -12,8 +12,9 @@
 
 #include <zmk/event_manager.h>
 
+#include "toucan_memory_sequence.h"
+
 #define TOUCAN_MEMORY_SLOT_COUNT 5
-#define TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY 64
 #define TOUCAN_MEMORY_TEXT_CAPACITY 64
 
 enum toucan_memory_slot_type {
@@ -27,21 +28,16 @@ enum toucan_memory_capture_mode {
     TOUCAN_MEMORY_CAPTURE_TEXT,
 };
 
-struct toucan_memory_sequence_action {
-    uint16_t usage_page;
-    uint16_t keycode;
-    uint8_t implicit_modifiers;
-    uint8_t explicit_modifiers;
-    bool pressed;
-};
-
 struct toucan_memory_capture_snapshot {
     bool active;
     uint8_t slot;
     uint8_t mode;
+    bool initial_caps_lock;
+    bool sequence_overflow;
     uint8_t sequence_action_count;
     struct toucan_memory_sequence_action
         sequence[TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY];
+    struct toucan_memory_sequence_preview sequence_preview[TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY];
     char text[TOUCAN_MEMORY_TEXT_CAPACITY + 1];
 };
 

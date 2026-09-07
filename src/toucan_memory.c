@@ -30,6 +30,7 @@
 #include <zmk/hid_indicators.h>
 #include <zmk/keys.h>
 
+#include "toucan_key_text.h"
 #include "toucan_memory.h"
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -62,10 +63,17 @@ struct memory_capture {
     bool active;
     uint8_t slot;
     uint8_t mode;
+    bool initial_caps_lock;
+    bool sequence_overflow;
+    uint16_t sequence_input_count;
+    struct toucan_memory_sequence_action
+        sequence_input[TOUCAN_MEMORY_SEQUENCE_INPUT_CAPACITY];
     uint8_t sequence_action_count;
     struct toucan_memory_sequence_action
         sequence[TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY];
+    struct toucan_memory_sequence_preview sequence_preview[TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY];
     char text[TOUCAN_MEMORY_TEXT_CAPACITY + 1];
+    struct toucan_key_text_state text_state;
 };
 
 struct swallowed_key {
@@ -81,7 +89,6 @@ static struct swallowed_key forwarded_active[SWALLOWED_ACTIVE_CAPACITY];
 static uint8_t swallowed_active_count;
 static uint8_t forwarded_active_count;
 static uint16_t capture_generation;
-static uint8_t held_modifiers;
 static bool memory_clear_held;
 static bool sys_thumb_pressed;
 static bool initial_sys_release_pending;
@@ -96,6 +103,7 @@ K_MSGQ_DEFINE(playback_queue, sizeof(uint8_t), PLAYBACK_QUEUE_DEPTH, 1);
 
 static void sys_hold_work_handler(struct k_work *work);
 static void sys_tap_work_handler(struct k_work *work);
+static bool caps_lock_active(void);
 K_WORK_DELAYABLE_DEFINE(sys_hold_work, sys_hold_work_handler);
 K_WORK_DELAYABLE_DEFINE(sys_tap_work, sys_tap_work_handler);
 
@@ -197,9 +205,13 @@ void toucan_memory_get_snapshot(struct toucan_memory_snapshot *snapshot) {
     snapshot->capture.active = capture.active;
     snapshot->capture.slot = capture.slot;
     snapshot->capture.mode = capture.mode;
+    snapshot->capture.initial_caps_lock = capture.initial_caps_lock;
+    snapshot->capture.sequence_overflow = capture.sequence_overflow;
     snapshot->capture.sequence_action_count = capture.sequence_action_count;
     memcpy(snapshot->capture.sequence, capture.sequence,
            sizeof(snapshot->capture.sequence));
+    memcpy(snapshot->capture.sequence_preview, capture.sequence_preview,
+           sizeof(snapshot->capture.sequence_preview));
     memcpy(snapshot->capture.text, capture.text, sizeof(snapshot->capture.text));
     k_mutex_unlock(&memory_mutex);
 }
@@ -207,7 +219,7 @@ void toucan_memory_get_snapshot(struct toucan_memory_snapshot *snapshot) {
 static bool capture_is_empty_locked(void) {
     return capture.mode == TOUCAN_MEMORY_CAPTURE_TEXT
                ? capture.text[0] == '\0'
-               : capture.sequence_action_count == 0U;
+               : capture.sequence_input_count == 0U;
 }
 
 static void reset_sys_gesture_locked(void) {
@@ -238,7 +250,8 @@ static void begin_capture(uint8_t slot) {
     capture.active = true;
     capture.slot = slot;
     capture.mode = TOUCAN_MEMORY_CAPTURE_SEQUENCE;
-    held_modifiers = 0U;
+    capture.initial_caps_lock = caps_lock_active();
+    capture.text_state.caps_lock = capture.initial_caps_lock;
     initial_sys_release_pending = sys_thumb_pressed;
     reset_sys_gesture_locked();
     k_mutex_unlock(&memory_mutex);
@@ -258,7 +271,6 @@ static void cancel_capture(void) {
 
     slot = capture.slot;
     wipe(&capture, sizeof(capture));
-    held_modifiers = 0U;
     initial_sys_release_pending = false;
     reset_sys_gesture_locked();
     k_mutex_unlock(&memory_mutex);
@@ -292,87 +304,24 @@ static bool append_text_character_locked(char character) {
     return true;
 }
 
-static uint8_t modifier_for_keycode(uint32_t keycode) {
-    if (keycode < HID_USAGE_KEY_KEYBOARD_LEFTCONTROL ||
-        keycode > HID_USAGE_KEY_KEYBOARD_RIGHT_GUI) {
-        return 0U;
+static void append_sequence_action_locked(const struct zmk_keycode_state_changed *event) {
+    if (capture.sequence_input_count == TOUCAN_MEMORY_SEQUENCE_INPUT_CAPACITY) {
+        capture.sequence_overflow = true;
+        return;
     }
-
-    return BIT(keycode - HID_USAGE_KEY_KEYBOARD_LEFTCONTROL);
-}
-
-static bool keyboard_event_to_character(const struct zmk_keycode_state_changed *event,
-                                        uint8_t modifiers, char *character) {
-    bool shifted = (modifiers & (MOD_LSFT | MOD_RSFT)) != 0U;
-    uint32_t keycode = event->keycode;
-
-    if (keycode >= HID_USAGE_KEY_KEYBOARD_A && keycode <= HID_USAGE_KEY_KEYBOARD_Z) {
-        zmk_hid_indicators_t indicators = zmk_hid_indicators_get_current_profile();
-        bool caps_lock = (indicators & BIT(HID_USAGE_LED_CAPS_LOCK - 1U)) != 0U;
-        *character = (char)(((shifted != caps_lock) ? 'A' : 'a') +
-                            keycode - HID_USAGE_KEY_KEYBOARD_A);
-        return true;
-    }
-
-    if (keycode >= HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION &&
-        keycode <= HID_USAGE_KEY_KEYBOARD_9_AND_LEFT_PARENTHESIS) {
-        static const char normal[] = "123456789";
-        static const char shifted_chars[] = "!@#$%^&*(";
-        size_t index = keycode - HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION;
-        *character = shifted ? shifted_chars[index] : normal[index];
-        return true;
-    }
-    if (keycode == HID_USAGE_KEY_KEYBOARD_0_AND_RIGHT_PARENTHESIS) {
-        *character = shifted ? ')' : '0';
-        return true;
-    }
-
-    switch (keycode) {
-    case HID_USAGE_KEY_KEYBOARD_RETURN_ENTER:
-        *character = '\n';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_TAB:
-        *character = '\t';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_SPACEBAR:
-        *character = ' ';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_MINUS_AND_UNDERSCORE:
-        *character = shifted ? '_' : '-';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS:
-        *character = shifted ? '+' : '=';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_LEFT_BRACKET_AND_LEFT_BRACE:
-        *character = shifted ? '{' : '[';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_RIGHT_BRACKET_AND_RIGHT_BRACE:
-        *character = shifted ? '}' : ']';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_BACKSLASH_AND_PIPE:
-        *character = shifted ? '|' : '\\';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_SEMICOLON_AND_COLON:
-        *character = shifted ? ':' : ';';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_APOSTROPHE_AND_QUOTE:
-        *character = shifted ? '"' : '\'';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_GRAVE_ACCENT_AND_TILDE:
-        *character = shifted ? '~' : '`';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_COMMA_AND_LESS_THAN:
-        *character = shifted ? '<' : ',';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_PERIOD_AND_GREATER_THAN:
-        *character = shifted ? '>' : '.';
-        return true;
-    case HID_USAGE_KEY_KEYBOARD_SLASH_AND_QUESTION_MARK:
-        *character = shifted ? '?' : '/';
-        return true;
-    default:
-        return false;
-    }
+    capture.sequence_input[capture.sequence_input_count++] =
+        (struct toucan_memory_sequence_action){
+            .usage_page = event->usage_page,
+            .keycode = event->keycode,
+            .implicit_modifiers = event->implicit_modifiers,
+            .explicit_modifiers = event->explicit_modifiers,
+            .pressed = event->state,
+        };
+    struct toucan_memory_sequence_result result =
+        toucan_memory_sequence_compile(capture.sequence_input, capture.sequence_input_count,
+                                       capture.sequence, capture.sequence_preview);
+    capture.sequence_action_count = result.count;
+    capture.sequence_overflow = result.overflow;
 }
 
 static bool add_swallowed_key_locked(uint16_t usage_page, uint16_t keycode) {
@@ -441,6 +390,11 @@ static bool finish_capture(void) {
         k_mutex_unlock(&memory_mutex);
         return false;
     }
+    if (capture.mode == TOUCAN_MEMORY_CAPTURE_SEQUENCE && capture.sequence_overflow) {
+        /* Never replace a good slot with a silently truncated parsed sequence. */
+        k_mutex_unlock(&memory_mutex);
+        return false;
+    }
 
     slot = capture.slot;
     struct persisted_memory_slot *saved = &slots[slot];
@@ -459,7 +413,6 @@ static bool finish_capture(void) {
     }
 
     wipe(&capture, sizeof(capture));
-    held_modifiers = 0U;
     initial_sys_release_pending = false;
     reset_sys_gesture_locked();
     k_mutex_unlock(&memory_mutex);
@@ -487,23 +440,23 @@ static int memory_keycode_listener(const zmk_event_t *eh) {
 
     if (!event->state && remove_swallowed_key_locked(event->usage_page, event->keycode,
                                                      &swallowed_generation)) {
-        held_modifiers &= ~(modifier_for_keycode(event->keycode) |
-                            event->explicit_modifiers);
-
         if (capture.active && capture.mode == TOUCAN_MEMORY_CAPTURE_SEQUENCE &&
-            swallowed_generation == capture_generation &&
-            capture.sequence_action_count < TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY) {
-            capture.sequence[capture.sequence_action_count++] =
-                (struct toucan_memory_sequence_action){
-                    .usage_page = event->usage_page,
-                    .keycode = event->keycode,
-                    .implicit_modifiers = event->implicit_modifiers,
-                    .explicit_modifiers = event->explicit_modifiers,
-                    .pressed = false,
-                };
+            swallowed_generation == capture_generation) {
+            append_sequence_action_locked(event);
+            notify = true;
+        }
+        if (capture.active && capture.mode == TOUCAN_MEMORY_CAPTURE_TEXT &&
+            swallowed_generation == capture_generation) {
+            char unused;
+            (void)toucan_key_text_apply(&capture.text_state, event->usage_page, event->keycode,
+                                       event->implicit_modifiers, event->explicit_modifiers,
+                                       false, &unused);
         }
 
         k_mutex_unlock(&memory_mutex);
+        if (notify) {
+            notify_memory_changed(-1, false);
+        }
         return ZMK_EV_EVENT_HANDLED;
     }
 
@@ -523,34 +476,19 @@ static int memory_keycode_listener(const zmk_event_t *eh) {
     (void)add_swallowed_key_locked(event->usage_page, event->keycode);
 
     if (capture.mode == TOUCAN_MEMORY_CAPTURE_SEQUENCE) {
-        if (capture.sequence_action_count < TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY) {
-            capture.sequence[capture.sequence_action_count++] =
-                (struct toucan_memory_sequence_action){
-                    .usage_page = event->usage_page,
-                    .keycode = event->keycode,
-                    .implicit_modifiers = event->implicit_modifiers,
-                    .explicit_modifiers = event->explicit_modifiers,
-                    .pressed = true,
-                };
-            notify = true;
-        }
+        append_sequence_action_locked(event);
+        notify = true;
     } else if (event->usage_page == HID_USAGE_KEY) {
-        uint8_t explicit_modifier = modifier_for_keycode(event->keycode);
-        if (explicit_modifier != 0U) {
-            held_modifiers |= explicit_modifier | event->explicit_modifiers;
-        } else {
-            char character;
-            if (keyboard_event_to_character(event,
-                                            held_modifiers | event->implicit_modifiers |
-                                                event->explicit_modifiers,
-                                            &character)) {
-                notify = append_text_character_locked(character);
-            } else if (event->keycode == HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE &&
-                       capture.text[0] != '\0') {
-                size_t length = bounded_length(capture.text, sizeof(capture.text));
-                capture.text[length - 1U] = '\0';
-                notify = true;
-            }
+        char character;
+        if (toucan_key_text_apply(&capture.text_state, event->usage_page, event->keycode,
+                                 event->implicit_modifiers, event->explicit_modifiers,
+                                 true, &character)) {
+            notify = append_text_character_locked(character);
+        } else if (event->keycode == HID_USAGE_KEY_KEYBOARD_DELETE_BACKSPACE &&
+                   capture.text[0] != '\0') {
+            size_t length = bounded_length(capture.text, sizeof(capture.text));
+            capture.text[length - 1U] = '\0';
+            notify = true;
         }
     }
 
