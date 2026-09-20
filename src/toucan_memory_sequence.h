@@ -1,5 +1,5 @@
 /*
- * Live compilation of typed modifier names into ordinary recorded key events.
+ * Live compilation of typed modifier/key names into ordinary recorded key events.
  * SPDX-License-Identifier: MIT
  */
 
@@ -10,7 +10,8 @@
 #include <stdint.h>
 
 #define TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY 64
-/* Room for all four names plus a target for each of 32 resulting key taps. */
+/* Room for all four modifier names plus a single target key for each of 32 taps.
+ * Spelling out a named target uses additional raw events within this fixed budget. */
 #define TOUCAN_MEMORY_SEQUENCE_INPUT_CAPACITY (TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY * 16)
 #define TOUCAN_MEMORY_MODIFIER_COUNT 4
 

@@ -12,19 +12,33 @@
 
 #include <dt-bindings/zmk/hid_usage.h>
 #include <dt-bindings/zmk/hid_usage_pages.h>
+#include <dt-bindings/zmk/modifiers.h>
 #include <zmk/events/keycode_state_changed.h>
 
 #include "toucan_key_text.h"
 #include "toucan_memory.h"
 
 static const struct {
+    uint16_t keycode;
+    uint8_t modifiers;
+    uint8_t order[TOUCAN_MEMORY_MODIFIER_COUNT];
+} named_shortcuts[] = {
+    {HID_USAGE_KEY_KEYBOARD_P, MOD_LCTL | MOD_LSFT, {MOD_LCTL, MOD_LSFT}},
+    {HID_USAGE_KEY_KEYBOARD_S, MOD_LCTL, {MOD_LCTL}},
+    {HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD, 0, {0}},
+    {HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD, MOD_LGUI, {MOD_LGUI}},
+    {HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD, MOD_LSFT | MOD_LGUI, {MOD_LSFT, MOD_LGUI}},
+    {HID_USAGE_KEY_KEYBOARD_A, 0, {0}},
+};
+
+static const struct {
     const char *preview;
     const char *playback;
     size_t playback_events;
 } expected[] = {
-    {"aABcAactrl", "aABcAactrl", 20},
+    {"aABcAactrldel", "aABcAactrldel", 26},
     {"aABcAa", "aABcAa", 20},
-    {"ps", "Ps", 4},
+    {"psa", "Psa", 2 * ARRAY_SIZE(named_shortcuts)},
     {"", "", 2},
     {"44", "$$", 4},
 };
@@ -33,6 +47,7 @@ static size_t replay_length;
 static size_t replay_events;
 static bool complete_capture[ARRAY_SIZE(expected)];
 static bool saw_live_ctrl;
+static bool saw_live_del;
 static bool saw_live_shift_cmd;
 static bool saw_live_cmd_shift;
 static bool saw_overflow;
@@ -87,6 +102,11 @@ static int capture_listener(const zmk_event_t *eh) {
     if (snapshot.capture.slot == 2 && is_ctrl_token(&snapshot.capture)) {
         saw_live_ctrl = true;
     }
+    if (snapshot.capture.slot == 2 && snapshot.capture.sequence_action_count >= 6 &&
+        snapshot.capture.sequence[4].keycode == HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD &&
+        snapshot.capture.sequence[4].pressed && !snapshot.capture.sequence[5].pressed) {
+        saw_live_del = true;
+    }
     if (snapshot.capture.slot == 4) {
         const struct toucan_memory_sequence_action *sequence = snapshot.capture.sequence;
         if (snapshot.capture.sequence_action_count == 4 &&
@@ -131,6 +151,20 @@ static int capture_listener(const zmk_event_t *eh) {
         assert(strncmp(preview, wanted, strlen(preview)) == 0);
     }
     if (strcmp(preview, wanted) == 0) {
+        if (snapshot.capture.slot == 2) {
+            assert(saw_live_del);
+            assert(snapshot.capture.sequence_action_count <= 2 * ARRAY_SIZE(named_shortcuts));
+            for (size_t i = 0; i < snapshot.capture.sequence_action_count; i++) {
+                const struct toucan_memory_sequence_action *action = &snapshot.capture.sequence[i];
+                assert(action->usage_page == HID_USAGE_KEY);
+                assert(action->keycode == named_shortcuts[i / 2].keycode);
+                assert(action->implicit_modifiers == named_shortcuts[i / 2].modifiers);
+                assert(action->explicit_modifiers == 0U);
+                assert(action->pressed == ((i % 2U) == 0U));
+                assert(memcmp(snapshot.capture.sequence_preview[i].modifier_order,
+                              named_shortcuts[i / 2].order, TOUCAN_MEMORY_MODIFIER_COUNT) == 0);
+            }
+        }
         if (snapshot.capture.slot == 4) {
             assert(saw_live_shift_cmd && saw_live_cmd_shift);
             for (size_t i = 0; i < snapshot.capture.sequence_action_count; i++) {
@@ -163,7 +197,7 @@ static int playback_listener(const zmk_event_t *eh) {
             assert(snapshot.slot_types[2] == TOUCAN_MEMORY_SLOT_SEQUENCE);
             assert(snapshot.slot_types[3] == TOUCAN_MEMORY_SLOT_SEQUENCE);
             assert(snapshot.slot_types[4] == TOUCAN_MEMORY_SLOT_SEQUENCE);
-            puts("PASS: private TEXT/SEQ capture, ordered shiftcmd4/cmdshift4 previews, "
+            puts("PASS: private TEXT/SEQ capture, del shorthand, ordered modifier previews, "
                  "shortcut playback, and overflow guards");
         }
         return ZMK_EV_EVENT_BUBBLE;
@@ -171,10 +205,10 @@ static int playback_listener(const zmk_event_t *eh) {
 
     assert(saved_count > 0U && saved_count <= ARRAY_SIZE(expected));
     if (saved_count == 3U) {
-        assert(replay_events < 4U);
-        bool first_key = replay_events < 2U;
-        assert(event->keycode == (first_key ? HID_USAGE_KEY_KEYBOARD_P : HID_USAGE_KEY_KEYBOARD_S));
-        assert(event->implicit_modifiers == (MOD_LCTL | (first_key ? MOD_LSFT : 0U)));
+        assert(replay_events < 2 * ARRAY_SIZE(named_shortcuts));
+        assert(event->usage_page == HID_USAGE_KEY);
+        assert(event->keycode == named_shortcuts[replay_events / 2].keycode);
+        assert(event->implicit_modifiers == named_shortcuts[replay_events / 2].modifiers);
         assert(event->explicit_modifiers == 0U);
         assert(event->state == ((replay_events % 2U) == 0U));
     } else if (saved_count == 4U) {

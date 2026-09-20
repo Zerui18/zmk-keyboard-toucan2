@@ -1,5 +1,5 @@
 /*
- * Bare ctrl/shift/alt/cmd names collapse immediately, without a delimiter.
+ * Bare modifier/key names collapse immediately, without a delimiter.
  * SPDX-License-Identifier: MIT
  */
 
@@ -12,16 +12,18 @@
 #include "toucan_key_text.h"
 #include "toucan_memory_sequence.h"
 
-#define MAX_MODIFIER_NAME_LENGTH 5
+#define MAX_SEQUENCE_NAME_LENGTH 5
+#define NO_INPUT_SOURCE UINT16_MAX
 
 static const struct {
-    char name[MAX_MODIFIER_NAME_LENGTH + 1];
-    uint8_t modifier;
-} modifier_names[] = {
-    {"ctrl", MOD_LCTL},
-    {"shift", MOD_LSFT},
-    {"alt", MOD_LALT},
-    {"cmd", MOD_LGUI},
+    char name[MAX_SEQUENCE_NAME_LENGTH + 1];
+    uint16_t keycode;
+} sequence_names[] = {
+    {"ctrl", HID_USAGE_KEY_KEYBOARD_LEFTCONTROL},
+    {"shift", HID_USAGE_KEY_KEYBOARD_LEFTSHIFT},
+    {"alt", HID_USAGE_KEY_KEYBOARD_LEFTALT},
+    {"cmd", HID_USAGE_KEY_KEYBOARD_LEFT_GUI},
+    {"del", HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD},
 };
 
 static void append_modifier(uint8_t order[TOUCAN_MEMORY_MODIFIER_COUNT], uint8_t modifier) {
@@ -47,10 +49,13 @@ struct sequence_compiler {
     bool unmatched_press[TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY];
 };
 
+static bool is_modifier_keycode(uint16_t keycode) {
+    return keycode >= HID_USAGE_KEY_KEYBOARD_LEFTCONTROL &&
+           keycode <= HID_USAGE_KEY_KEYBOARD_RIGHT_GUI;
+}
+
 static bool is_modifier(const struct toucan_memory_sequence_action *action) {
-    return action->usage_page == HID_USAGE_KEY &&
-           action->keycode >= HID_USAGE_KEY_KEYBOARD_LEFTCONTROL &&
-           action->keycode <= HID_USAGE_KEY_KEYBOARD_RIGHT_GUI;
+    return action->usage_page == HID_USAGE_KEY && is_modifier_keycode(action->keycode);
 }
 
 static bool same_key(const struct toucan_memory_sequence_action *a,
@@ -138,7 +143,20 @@ static void emit(struct sequence_compiler *compiler,
         compiler->preview[index] = *preview;
     }
     compiler->press_source[index] = source;
-    compiler->unmatched_press[index] = action.pressed;
+    /* Generated taps have their own releases, not releases from the raw input. */
+    compiler->unmatched_press[index] = action.pressed && source != NO_INPUT_SOURCE;
+}
+
+static void apply_named_modifiers(struct toucan_memory_sequence_action *action,
+                                  struct toucan_memory_sequence_preview *preview,
+                                  const uint8_t named_modifiers[TOUCAN_MEMORY_MODIFIER_COUNT]) {
+    if (named_modifiers == NULL) {
+        return;
+    }
+    memcpy(preview->modifier_order, named_modifiers, sizeof(preview->modifier_order));
+    for (size_t i = 0; i < TOUCAN_MEMORY_MODIFIER_COUNT; i++) {
+        action->implicit_modifiers |= named_modifiers[i];
+    }
 }
 
 static void emit_input(struct sequence_compiler *compiler, size_t source,
@@ -148,12 +166,7 @@ static void emit_input(struct sequence_compiler *compiler, size_t source,
         .implicit_modifiers = action.implicit_modifiers,
     };
     if (action.pressed) {
-        if (named_modifiers != NULL) {
-            memcpy(preview.modifier_order, named_modifiers, sizeof(preview.modifier_order));
-            for (size_t i = 0; i < TOUCAN_MEMORY_MODIFIER_COUNT; i++) {
-                action.implicit_modifiers |= named_modifiers[i];
-            }
-        }
+        apply_named_modifiers(&action, &preview, named_modifiers);
     } else {
         /* A one-shot named modifier must accompany the corresponding release too,
          * even when other keys have rolled over the target in the meantime. */
@@ -195,7 +208,21 @@ static void emit_modifier(struct sequence_compiler *compiler, uint8_t modifier, 
         .usage_page = HID_USAGE_KEY,
         .keycode = keycode,
         .pressed = pressed,
-    }, 0U, NULL);
+    }, NO_INPUT_SOURCE, NULL);
+}
+
+static void emit_named_tap(struct sequence_compiler *compiler, uint16_t keycode,
+                           const uint8_t named_modifiers[TOUCAN_MEMORY_MODIFIER_COUNT]) {
+    struct toucan_memory_sequence_action action = {
+        .usage_page = HID_USAGE_KEY,
+        .keycode = keycode,
+        .pressed = true,
+    };
+    struct toucan_memory_sequence_preview preview = {0};
+    apply_named_modifiers(&action, &preview, named_modifiers);
+    emit(compiler, action, NO_INPUT_SOURCE, &preview);
+    action.pressed = false;
+    emit(compiler, action, NO_INPUT_SOURCE, &preview);
 }
 
 struct toucan_memory_sequence_result toucan_memory_sequence_compile(
@@ -229,15 +256,22 @@ struct toucan_memory_sequence_result toucan_memory_sequence_compile(
         uint8_t held = toucan_key_text_modifiers(&physical_modifiers);
         bool matched = false;
         if (name_letter(action, held) != '\0') {
-            for (size_t name = 0; name < sizeof(modifier_names) / sizeof(modifier_names[0]); name++) {
-                size_t presses[MAX_MODIFIER_NAME_LENGTH];
-                if (!match_name(&compiler, i, held, modifier_names[name].name, presses)) {
+            for (size_t name = 0; name < sizeof(sequence_names) / sizeof(sequence_names[0]); name++) {
+                size_t presses[MAX_SEQUENCE_NAME_LENGTH];
+                if (!match_name(&compiler, i, held, sequence_names[name].name, presses)) {
                     continue;
                 }
-                for (size_t letter = 0; modifier_names[name].name[letter] != '\0'; letter++) {
+                for (size_t letter = 0; sequence_names[name].name[letter] != '\0'; letter++) {
                     omit_key_pair(&compiler, presses[letter]);
                 }
-                append_modifier(pending_modifiers, modifier_names[name].modifier);
+                uint16_t keycode = sequence_names[name].keycode;
+                if (is_modifier_keycode(keycode)) {
+                    append_modifier(pending_modifiers,
+                                    1U << (keycode - HID_USAGE_KEY_KEYBOARD_LEFTCONTROL));
+                } else {
+                    emit_named_tap(&compiler, keycode, pending_modifiers);
+                    memset(pending_modifiers, 0, sizeof(pending_modifiers));
+                }
                 matched = true;
                 break;
             }

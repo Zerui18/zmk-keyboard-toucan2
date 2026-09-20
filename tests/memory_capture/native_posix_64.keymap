@@ -20,7 +20,7 @@
             bindings = <
                 &mem_set 0 &kp A &kp B &kp C &kp LSHFT &kp RSHFT &kp CAPS &mem_use 0 &mem_use 1 &mem_set 1 &kp F12 &none
                 &kp T &kp R &kp L &kp S &kp H &kp I &kp F &kp P &mem_set 2 &mem_use 2 &mem_set 3 &mem_use 3
-                &kp Z &kp M &kp D &kp N4 &mem_set 4 &mem_use 4 &none &none &none &none &none &none
+                &kp Z &kp M &kp D &kp N4 &mem_set 4 &mem_use 4 &kp E &none &none &none &none &none
                 &none &none &none &none &none &none
             >;
         };
@@ -46,6 +46,7 @@
 #define CTRL_NAME TAP(3) TAP(12) TAP(13) TAP(14)
 #define SHIFT_NAME TAP(15) TAP(16) TAP(17) TAP(18) TAP(12)
 #define CMD_NAME TAP(3) TAP(25) TAP(26)
+#define DEL_NAME TAP(26) TAP(30) TAP(14)
 #define Z8 TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24)
 
 &kscan {
@@ -56,7 +57,7 @@
         ZMK_MOCK_PRESS(0,0,20) ZMK_MOCK_RELEASE(0,0,100)
         ZMK_MOCK_PRESS(0,36,20) ZMK_MOCK_RELEASE(0,36,350)
         MIXED_CASE_EVENTS
-        CTRL_NAME /* TEXT must keep the name literal. */
+        CTRL_NAME DEL_NAME /* TEXT must keep both names literal. */
         ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
         ZMK_MOCK_PRESS(0,7,20) ZMK_MOCK_RELEASE(0,7,600)
 
@@ -66,10 +67,14 @@
         ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
         ZMK_MOCK_PRESS(0,8,20) ZMK_MOCK_RELEASE(0,8,600)
 
-        /* Slot 2: type ctrlshiftpctrls, without physical modifiers or delimiters. */
+        /* Slot 2: named shortcuts and Delete taps, followed by an unmodified a. */
         ZMK_MOCK_PRESS(0,20,20) ZMK_MOCK_RELEASE(0,20,100)
         CTRL_NAME SHIFT_NAME TAP(19)
         CTRL_NAME TAP(15)
+        DEL_NAME
+        CMD_NAME DEL_NAME
+        SHIFT_NAME CMD_NAME DEL_NAME
+        TAP(1)
         ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
         ZMK_MOCK_PRESS(0,21,20) ZMK_MOCK_RELEASE(0,21,600)
 

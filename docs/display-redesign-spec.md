@@ -336,7 +336,7 @@ off-screen compositing or page transitions.
 | Activity state | `zmk_activity_state_changed` | Active, idle, or sleep |
 | Right split link and USB power | `toucan_split_status_changed` | Explicitly relayed; no 0%-battery disconnect heuristic |
 | Host Caps Lock | `zmk_hid_indicators_changed` | Drives the CAPS footer label |
-| macOS/Windows mode | `toucan_platform_mode_changed` | Persistent mode drives the MAC/WIN badge |
+| macOS/Windows mode | `toucan_platform_mode_changed` | Persistent mode selects the Apple/Windows footer symbol |
 | Memory slot/capture state | `toucan_memory_state_changed` | Exposes slot types and live capture only; persisted content stays private |
 
 ### Available in pinned ZMK with another listener or query
@@ -389,7 +389,7 @@ The display should assume the following named layer set and access scheme.
 | 4 | `EDT` | Hold `D`, then use `S`/`F` | Undo, redo |
 | 5 | `APP` | Hold `C`, then use `X`/`V` | Cycle backward/forward through applications |
 | 6 | `MOU` | Trackpad touch | Opaque pointer layer; D/F scroll and mouse buttons on thumbs |
-| 7 | `SYS` | Hold outer-left thumb | Bluetooth profiles plus persistent macro memory |
+| 7 | `SYS` | Hold outer-left thumb | Bluetooth profiles, persistent macro memory, and Hyper shortcuts |
 | 8 | `FN` | Hold outer-right thumb | Diagnostics, F-keys, volume, platform mode |
 | 9 | `DNG` | Hold both outer thumbs | Bootloader and reset |
 
@@ -400,14 +400,14 @@ Esc     Q/NAV   W       E       R       T        Y       U       I       O      
 =/Ctrl  A/SYM   S/CLIP  D/EDIT  F       G        H       J       K       L       ;/SYM   '/Ctrl
 -       Z/Shift X       C/APP   V       B        N       M       ,       .       //Shift _
 
-                   SYS  Backspace/Cmd  Tab/Option        Enter  Space  FN
+                   SYS  Backspace  Tab/Cmd        Enter/Option  Space  FN
 ```
 
-The outer thumbs are layer keys. The left Backspace thumb taps Backspace and
-holds platform-aware Command/Control; the adjacent thumb taps Tab and holds
+The outer thumbs are layer keys. The left Tab thumb taps Tab and holds
+platform-aware Command/Control. The right Enter thumb taps Enter and holds
 left Option/Alt. Both use balanced resolution, a 200 ms tapping term, a 200 ms
 quick-tap window for repeating their tap key, and a 125 ms prior-idle guard.
-Enter and Space remain single-role.
+Backspace and Space remain single-role.
 
 ### Symbol
 
@@ -442,11 +442,13 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
 - `MOU` is opaque: every unassigned position is `&none`. D/F scroll up/down
   using HID Resolution Multipliers at 10 units/second and a 16 ms tick; the
   thumb row is `Middle Left Right | Left Right Middle`.
-- `SYS`: the left top row is `BT_CLR, BT1, BT2, BT3, BT4, BT5`; the left home
+- `SYS`: the left bottom row is `BT_CLR, BT1, BT2, BT3, BT4, BT5`; the left home
   row is `MEM_CLR, MEM1, MEM2, MEM3, MEM4, MEM5`. `BT_CLR` is inert on release
   before two seconds; a two-second hold clears only the selected profile.
   Tapping a memory slot replays it, holding it for 400 ms starts capture, and
   holding MEM_CLR while tapping a slot clears it.
+  Q/W on the top row send Hyper+A/Hyper+V, respectively: Ctrl+Shift+Alt+GUI
+  plus the target key, independent of the macOS/Windows mode.
 - `FN`: `Z` requests raw voltage from both halves, `M` toggles macOS/Windows
   mode, `Esc` unlocks Studio, the left side carries F1–F12, and the top-right
   positions carry volume down/mute/up.
@@ -513,7 +515,7 @@ The detailed interaction guide is
 | `toucan_battery_estimator.c/.h` | Five ADC readings 10 ms apart, median, per-half mV offset, nonlinear 3.3–4.2 V LiPo curve, 1/4 IIR filter, maximum 2 percentage points per report, persisted state restored when within 200 mV | Local raw, calibrated/filtered voltage and percent exist; only percentage is currently in the UI |
 | `behavior_toucan_battery_readout.c` | Global `&battery` behavior asks each half for its own reading | Could be changed from typing text to opening a temporary diagnostics page |
 | `toucan_battery_readout.c/.h` | Queues left raw mV, relays right raw mV through a private input-split message, waits for a ready endpoint, then types `left=...mv` and `right=...mv` | Reuse the relay but cache structured state; do not type when the intended action is screen-only |
-| `toucan_platform_mode.c` | Persistent macOS/Windows mode; platform-aware command-key behavior keeps dedicated Ctrl unchanged; exposes getter/change event | Drives the live MAC/WIN footer and sequence-preview modifier art |
+| `toucan_platform_mode.c` | Persistent macOS/Windows mode; platform-aware command-key behavior keeps dedicated Ctrl unchanged; exposes getter/change event | Drives the Apple/Windows footer symbol and Command/Windows sequence-preview modifier art |
 | `toucan_memory.c/.h` | Five persistent `empty|sequence|text` slots, private capture, playback, clear, and SYS-thumb capture gestures | Drives the ME row and MEM SET page; content is wiped from the capture buffer after save/cancel |
 | `toucan_bootloader.c/.h` | Side-local UF2 request shared by the DNG key and guarded serial touch | Gives the left display time to reveal the retained UF2 page; right reboots immediately |
 | `toucan_display_hooks.h` | Narrow pre-off and pre-UF2 hooks with millisecond delay return values | Keeps power/reboot modules independent of the optional screen implementation |
@@ -556,10 +558,11 @@ constraints.
 ## Implemented v2 dashboard, pages, and memory
 
 The `/Users/zeruichen/Downloads/handoff-v2` design is implemented by the single
-linked renderer in `widgets/screen.c`. It uses embedded 5×6 and 4×5 one-bit
-fonts, exact integer geometry, one 24,192-byte LVGL canvas, dirty row bands,
-and a single event-driven animation scheduler. The older `sleep.c` renderer and
-QuinqueFive assets are no longer linked.
+linked renderer in `widgets/screen.c`. It uses native-resolution one-bit artwork
+from `assets/generated_fonts.h` and `assets/display_icons.h`, exact integer
+geometry, one 24,192-byte LVGL canvas, dirty row bands, and a single event-driven
+animation scheduler. The older `sleep.c` renderer and QuinqueFive assets are no
+longer linked.
 
 `CONFIG_NICE_VIEW_WIDGET_INVERTED=y` preserves the polarity requested after the
 first handoff. Changing that setting flips every dashboard and page pixel
@@ -573,7 +576,32 @@ together.
 | LAYER | `48..69` | Highest active layer: `BASE SYM NAV CLP EDT APP MOU SYS FN DNG` |
 | BT | `82..101` | Five bonded/open profiles, active profile, and resolved/unresolved connection marker |
 | ME | `114..133` | Five persistent memory slot types; a prime mark means sequence, a plain digit means text, and a dot means empty |
-| SYS | `146..161` | Host Caps Lock and persistent MAC/WIN mode |
+| SYS | `146..161` | Host Caps Lock and persistent platform mode, shown as an Apple or Windows symbol |
+
+The platform symbol occupies a right-aligned 16×16 cell at x=120, y=146:
+a native 16×16 Apple silhouette for macOS or four-pane Windows logo. Both are
+drawn at 1×, so each source cell controls one LCD pixel rather than a doubled
+2×2 block. The Apple curves/leaf/bite and equal Windows panes are drawn on this
+finer grid, not upscaled copies of the old 8×8 artwork. They stay entirely
+inside the SYS dirty band and share the usual 8-pixel right inset. CAPS remains
+at x=8, y=148.
+
+Editable icons live in `assets/display_icons.h`. Each `X` is one ink pixel and
+each `.` is background. Platform and modifier symbols are native
+16×16 bitmaps; the Windows symbol is shared between the footer and SEQ, while
+Apple and Command remain separate.
+
+The renderer has no bitmap scaling path. Text uses the native Terminus Font
+4.49.1 bitmaps: 6×12 normal and 10×18, 12×24, 16×32 bold, yielding 8/12/15/20-pixel
+capitals for metadata, STATUS, page titles, and layer names. A standard-library
+packer copies the upstream BDF ink unchanged, preserving monospaced advances,
+bearings, and baselines, including taller punctuation and lowercase descenders.
+There is no outline rasterization or resampling. The source archive is pinned;
+the subset is named Toucan Display and carries the upstream OFL license.
+Power/disconnect bitmaps also
+use native pixels; the procedural moon, power, download, battery, and signal
+shapes were already native. See [memory-font.md](memory-font.md) for metrics,
+regeneration, and the production-artwork specimen command.
 
 The slot columns begin at x=38 with a 20-pixel pitch. USB appearance blinks the
 relevant half's bolt for six 250 ms frames; an unresolved active BLE profile
@@ -595,8 +623,9 @@ dashboard transfers zero bytes.
   host request reboots the left half. The screenless right half has no delay.
 - MEM SET shows the selected slot, SEQ/TEXT mode, live private capture, and a
   530 ms caret blink. Both modes preserve case in their previews, using the
-  STATUS font's lowercase extension with four-row bodies and two-row descenders.
-  Original capitals remain unchanged; see [memory-font.md](memory-font.md).
+  native STATUS font with nine-pixel lowercase bodies and up to three-pixel
+  descenders. The 19-pixel line pitch accommodates taller punctuation without
+  overlap. Case semantics are unchanged; see [memory-font.md](memory-font.md).
 
 Page changes are seven top-down row reveals at 83 ms per frame. Each row is
 invalidated once by the transition itself, for one 3,362-byte full-frame cost
@@ -628,6 +657,11 @@ icons and combine on the next non-modifier key. Names are case-insensitive and
 reserved even within words; TEXT leaves them literal. See the
 [SEQ shorthand rules](toucan-moonlander-layout.md#seq-modifier-name-shorthand)
 for examples and input boundaries.
+
+The named target `del` immediately compiles to a balanced forward-Delete
+press/release pair, displayed as `DEL`. It consumes any pending modifiers
+(`cmddel` is Cmd+Delete); repeated `deldel` produces two taps. It is a recorded
+key, not a capture-editing command or Backspace. TEXT keeps `del` literal.
 
 SEQ retains up to 1,024 source events for live recompilation. Exceeding that
 input limit or the 64-action output limit shows `FULL` in the MEM SET footer

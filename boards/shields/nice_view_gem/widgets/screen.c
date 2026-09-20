@@ -38,7 +38,8 @@
 #include <zmk/split/central.h>
 #include <zmk/usb.h>
 
-#include "../assets/bitmap_font.h"
+#include "../assets/generated_fonts.h"
+#include "../assets/display_icons.h"
 #include "screen.h"
 #include "toucan_display_hooks.h"
 #include "toucan_key_text.h"
@@ -87,8 +88,9 @@ enum dashboard_band {
 #define MEMORY_FLASH_FRAMES 4
 #define MEMORY_FLASH_FRAME_MS 150
 #define CARET_BLINK_MS 530
-#define CONTENT_LINE_PITCH 18
-#define CONTENT_GLYPH_HEIGHT 16
+/* Tall punctuation can extend above the capitals; leave one clear row per line. */
+#define CONTENT_LINE_PITCH (status_font.height + 1)
+#define CONTENT_GLYPH_HEIGHT MAX(status_font.height + status_font.y_offset, 16)
 #define CONTENT_BOTTOM 148 /* Leave the TEXT counter at y=154 unobstructed. */
 
 #ifndef TOUCAN_FIRMWARE_VERSION
@@ -98,200 +100,6 @@ enum dashboard_band {
 #ifndef TOUCAN_GIT_SHA
 #define TOUCAN_GIT_SHA "UNKNOWN"
 #endif
-
-/* STATUS: original 5x6 capitals, extended for literal memory content.
- * Lowercase has a four-row x-height (rows 2..5), cap-height ascenders,
- * and two descender rows (6..7). Most bodies are four pixels wide;
- * m/w retain five, and i/l remain narrow. All strokes stay on the 1-bit grid. */
-static const struct bitmap_glyph status_glyphs[] = {
-    {'0', 5, 6, ".XXX." "X...X" "X...X" "X...X" "X...X" ".XXX."},
-    {'1', 5, 6, "..X.." ".XX.." "..X.." "..X.." "..X.." ".XXX."},
-    {'2', 5, 6, ".XXX." "X...X" "...X." "..X.." ".X..." "XXXXX"},
-    {'3', 5, 6, "XXXX." "....X" "..XX." "....X" "X...X" ".XXX."},
-    {'4', 5, 6, "..XX." ".X.X." "X..X." "XXXXX" "...X." "...X."},
-    {'5', 5, 6, "XXXXX" "X...." "XXXX." "....X" "X...X" ".XXX."},
-    {'6', 5, 6, ".XXX." "X...." "XXXX." "X...X" "X...X" ".XXX."},
-    {'7', 5, 6, "XXXXX" "....X" "...X." "..X.." ".X..." ".X..."},
-    {'8', 5, 6, ".XXX." "X...X" ".XXX." "X...X" "X...X" ".XXX."},
-    {'9', 5, 6, ".XXX." "X...X" "X...X" ".XXXX" "....X" ".XXX."},
-    {'A', 5, 6, ".XXX." "X...X" "X...X" "XXXXX" "X...X" "X...X"},
-    {'B', 5, 6, "XXXX." "X...X" "XXXX." "X...X" "X...X" "XXXX."},
-    {'C', 5, 6, ".XXXX" "X...." "X...." "X...." "X...." ".XXXX"},
-    {'D', 5, 6, "XXXX." "X...X" "X...X" "X...X" "X...X" "XXXX."},
-    {'E', 5, 6, "XXXXX" "X...." "XXXX." "X...." "X...." "XXXXX"},
-    {'F', 5, 6, "XXXXX" "X...." "XXXX." "X...." "X...." "X...."},
-    {'G', 5, 6, ".XXXX" "X...." "X.XXX" "X...X" "X...X" ".XXXX"},
-    {'H', 5, 6, "X...X" "X...X" "XXXXX" "X...X" "X...X" "X...X"},
-    {'I', 3, 6, "XXX" ".X." ".X." ".X." ".X." "XXX"},
-    {'J', 5, 6, "...XX" "....X" "....X" "....X" "X...X" ".XXX."},
-    {'K', 5, 6, "X...X" "X..X." "XXX.." "X..X." "X...X" "X...X"},
-    {'L', 5, 6, "X...." "X...." "X...." "X...." "X...." "XXXXX"},
-    {'M', 5, 6, "X...X" "XX.XX" "X.X.X" "X...X" "X...X" "X...X"},
-    {'N', 5, 6, "X...X" "XX..X" "X.X.X" "X..XX" "X...X" "X...X"},
-    {'O', 5, 6, ".XXX." "X...X" "X...X" "X...X" "X...X" ".XXX."},
-    {'P', 5, 6, "XXXX." "X...X" "X...X" "XXXX." "X...." "X...."},
-    {'Q', 5, 6, ".XXX." "X...X" "X...X" "X.X.X" "X..X." ".XX.X"},
-    {'R', 5, 6, "XXXX." "X...X" "X...X" "XXXX." "X..X." "X...X"},
-    {'S', 5, 6, ".XXXX" "X...." ".XXX." "....X" "....X" "XXXX."},
-    {'T', 5, 6, "XXXXX" "..X.." "..X.." "..X.." "..X.." "..X.."},
-    {'U', 5, 6, "X...X" "X...X" "X...X" "X...X" "X...X" ".XXX."},
-    {'V', 5, 6, "X...X" "X...X" "X...X" ".X.X." ".X.X." "..X.."},
-    {'W', 5, 6, "X...X" "X...X" "X...X" "X.X.X" "XX.XX" "X...X"},
-    {'X', 5, 6, "X...X" ".X.X." "..X.." "..X.." ".X.X." "X...X"},
-    {'Y', 5, 6, "X...X" ".X.X." "..X.." "..X.." "..X.." "..X.."},
-    {'Z', 5, 6, "XXXXX" "....X" "...X." "..X.." ".X..." "XXXXX"},
-    {'a', 4, 6, "...." "...." ".XXX" "X..X" "X..X" ".XXX"},
-    {'b', 4, 6, "X..." "X..." "XXX." "X..X" "X..X" "XXX."},
-    {'c', 4, 6, "...." "...." ".XXX" "X..." "X..." ".XXX"},
-    {'d', 4, 6, "...X" "...X" ".XXX" "X..X" "X..X" ".XXX"},
-    {'e', 4, 6, "...." "...." ".XX." "X..X" "XXX." ".XXX"},
-    {'f', 4, 6, "..XX" ".X.." "XXX." ".X.." ".X.." ".X.."},
-    {'g', 4, 8, "...." "...." ".XXX" "X..X" "X..X" ".XXX" "...X" ".XX."},
-    {'h', 4, 6, "X..." "X..." "XXX." "X..X" "X..X" "X..X"},
-    {'i', 1, 6, "X" "." "X" "X" "X" "X"},
-    {'j', 3, 8, "..X" "..." ".XX" "..X" "..X" "..X" "X.X" ".X."},
-    {'k', 4, 6, "X..." "X..." "X..X" "X.X." "XX.." "X..X"},
-    {'l', 3, 6, "XX." ".X." ".X." ".X." ".X." ".XX"},
-    {'m', 5, 6, "....." "....." "XX.X." "X.X.X" "X.X.X" "X.X.X"},
-    {'n', 4, 6, "...." "...." "XXX." "X..X" "X..X" "X..X"},
-    {'o', 4, 6, "...." "...." ".XX." "X..X" "X..X" ".XX."},
-    {'p', 4, 8, "...." "...." "XXX." "X..X" "X..X" "XXX." "X..." "X..."},
-    {'q', 4, 8, "...." "...." ".XXX" "X..X" "X..X" ".XXX" "...X" "...X"},
-    {'r', 3, 6, "..." "..." "X.X" "XX." "X.." "X.."},
-    {'s', 4, 6, "...." "...." ".XXX" "XX.." "..XX" "XXX."},
-    {'t', 3, 6, "..." ".X." "XXX" ".X." ".X." ".XX"},
-    {'u', 4, 6, "...." "...." "X..X" "X..X" "X..X" ".XXX"},
-    {'v', 3, 6, "..." "..." "X.X" "X.X" "X.X" ".X."},
-    {'w', 5, 6, "....." "....." "X...X" "X.X.X" "X.X.X" ".X.X."},
-    {'x', 3, 6, "..." "..." "X.X" ".X." ".X." "X.X"},
-    {'y', 4, 8, "...." "...." "X..X" "X..X" "X..X" ".XXX" "...X" ".XX."},
-    {'z', 4, 6, "...." "...." "XXXX" "..X." ".X.." "XXXX"},
-    {'!', 1, 6, "X" "X" "X" "X" "." "X"},
-    {'?', 4, 6, "XXX." "...X" "..X." "..X." "...." "..X."},
-    {'+', 5, 6, "..X.." "..X.." "XXXXX" "..X.." "..X.." "....."},
-    {'%', 5, 6, "XX..X" "XX.X." "..X.." ".X..." "X.XX." "X..XX"},
-    {'-', 4, 6, "...." "...." "XXXX" "...." "...." "...."},
-    {'.', 1, 6, "." "." "." "." "." "X"},
-    {'/', 5, 6, "....X" "...X." "..X.." ".X..." "X...." "....."},
-    {':', 1, 6, "." "X" "." "." "X" "."},
-    {'*', 2, 6, ".." "XX" "XX" ".." ".." ".."},
-    /* Complete printable ASCII so decoded TEXT/SEQ punctuation stays literal. */
-    {'"', 3, 6, "X.X" "X.X" "..." "..." "..." "..."},
-    {'#', 5, 6, ".X.X." "XXXXX" ".X.X." "XXXXX" ".X.X." "....."},
-    {'$', 5, 6, "..X.." ".XXXX" "X.X.." ".XXX." "..X.X" "XXXX."},
-    {'&', 5, 6, ".XX.." "X..X." ".XX.." "X.X.X" "X..X." ".XX.X"},
-    {'\'', 1, 6, "X" "X" "." "." "." "."},
-    {'(', 3, 6, "..X" ".X." "X.." "X.." ".X." "..X"},
-    {')', 3, 6, "X.." ".X." "..X" "..X" ".X." "X.."},
-    {',', 2, 7, ".." ".." ".." ".." ".." ".X" "X."},
-    {';', 2, 7, ".." ".X" ".." ".." ".." ".X" "X."},
-    {'<', 4, 6, "...." "...X" ".XX." "X..." ".XX." "...X"},
-    {'=', 4, 6, "...." "XXXX" "...." "XXXX" "...." "...."},
-    {'>', 4, 6, "...." "X..." ".XX." "...X" ".XX." "X..."},
-    {'@', 5, 6, ".XXX." "X...X" "X.XXX" "X.X.X" "X.XX." ".XXXX"},
-    {'[', 3, 6, "XXX" "X.." "X.." "X.." "X.." "XXX"},
-    {'\\', 5, 6, "X...." ".X..." "..X.." "...X." "....X" "....."},
-    {']', 3, 6, "XXX" "..X" "..X" "..X" "..X" "XXX"},
-    {'^', 5, 6, "..X.." ".X.X." "X...X" "....." "....." "....."},
-    {'_', 5, 7, "....." "....." "....." "....." "....." "....." "XXXXX"},
-    {'`', 2, 6, "X." ".X" ".." ".." ".." ".."},
-    {'{', 3, 6, ".XX" ".X." "X.." "X.." ".X." ".XX"},
-    {'|', 1, 6, "X" "X" "X" "X" "X" "X"},
-    {'}', 3, 6, "XX." ".X." "..X" "..X" ".X." "XX."},
-    {'~', 5, 6, "....." "....." ".X..X" "X.XX." "....." "....."},
-};
-
-/* 4x5 LAYER font from the display handoff, plus digits for fallback L<n>. */
-static const struct bitmap_glyph layer_glyphs[] = {
-    {'0', 4, 5, ".XX." "X..X" "X..X" "X..X" ".XX."},
-    {'1', 3, 5, ".X." "XX." ".X." ".X." "XXX"},
-    {'2', 4, 5, "XXX." "...X" ".XX." "X..." "XXXX"},
-    {'3', 4, 5, "XXX." "...X" ".XX." "...X" "XXX."},
-    {'4', 4, 5, "X..X" "X..X" "XXXX" "...X" "...X"},
-    {'5', 4, 5, "XXXX" "X..." "XXX." "...X" "XXX."},
-    {'6', 4, 5, ".XX." "X..." "XXX." "X..X" ".XX."},
-    {'7', 4, 5, "XXXX" "...X" "..X." ".X.." ".X.."},
-    {'8', 4, 5, ".XX." "X..X" ".XX." "X..X" ".XX."},
-    {'9', 4, 5, ".XX." "X..X" ".XXX" "...X" ".XX."},
-    {'A', 4, 5, ".XX." "X..X" "XXXX" "X..X" "X..X"},
-    {'B', 4, 5, "XXX." "X..X" "XXX." "X..X" "XXX."},
-    {'C', 4, 5, ".XXX" "X..." "X..." "X..." ".XXX"},
-    {'D', 4, 5, "XXX." "X..X" "X..X" "X..X" "XXX."},
-    {'E', 4, 5, "XXXX" "X..." "XXX." "X..." "XXXX"},
-    {'F', 4, 5, "XXXX" "X..." "XXX." "X..." "X..."},
-    {'G', 4, 5, ".XXX" "X..." "X.XX" "X..X" ".XXX"},
-    {'L', 4, 5, "X..." "X..." "X..." "X..." "XXXX"},
-    {'M', 5, 5, "X...X" "XX.XX" "X.X.X" "X...X" "X...X"},
-    {'N', 4, 5, "X..X" "XX.X" "X.XX" "X..X" "X..X"},
-    {'O', 4, 5, ".XX." "X..X" "X..X" "X..X" ".XX."},
-    {'P', 4, 5, "XXX." "X..X" "XXX." "X..." "X..."},
-    {'S', 4, 5, ".XXX" "X..." ".XX." "...X" "XXX."},
-    {'T', 3, 5, "XXX" ".X." ".X." ".X." ".X."},
-    {'U', 4, 5, "X..X" "X..X" "X..X" "X..X" ".XX."},
-    {'V', 3, 5, "X.X" "X.X" "X.X" "X.X" ".X."},
-    {'Y', 3, 5, "X.X" "X.X" ".X." ".X." ".X."},
-    {'?', 4, 5, "XXX." "...X" ".XX." "...." ".X.."},
-};
-
-static const struct bitmap_glyph bolt_icon = {
-    .width = 4,
-    .height = 6,
-    .pixels = "..XX" ".XX." "XXXX" "..X." ".X.." "X...",
-};
-
-static const struct bitmap_glyph cross_icon = {
-    .width = 5,
-    .height = 5,
-    .pixels = "X...X" ".X.X." "..X.." ".X.X." "X...X",
-};
-
-static const struct bitmap_glyph modifier_icons[] = {
-    {'G', 8, 8,
-     ".X....X."
-     "X.X..X.X"
-     "X.XXXX.X"
-     ".XX..XX."
-     ".XX..XX."
-     "X.XXXX.X"
-     "X.X..X.X"
-     ".X....X."},
-    {'S', 8, 8,
-     "...XX..."
-     "..XXXX.."
-     ".XXXXXX."
-     "XXXXXXXX"
-     "..XXXX.."
-     "..XXXX.."
-     "..XXXX.."
-     "........"},
-    {'C', 8, 8,
-     "........"
-     "...XX..."
-     "..XXXX.."
-     ".XX..XX."
-     "XX....XX"
-     "........"
-     "........"
-     "........"},
-    {'A', 8, 8,
-     "XXX...XX"
-     "..XX...."
-     "...XX..."
-     "....XX.."
-     ".....XXX"
-     "........"
-     "........"
-     "........"},
-    {'W', 8, 8,
-     "XXX.XXXX"
-     "XXX.XXXX"
-     "XXX.XXXX"
-     "........"
-     "XXX.XXXX"
-     "XXX.XXXX"
-     "XXX.XXXX"
-     "........"},
-};
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
@@ -375,63 +183,49 @@ static void clear_framebuffer(struct zmk_widget_screen *widget) {
 }
 
 static void draw_bitmap(struct zmk_widget_screen *widget, int x, int y,
-                        const struct bitmap_glyph *glyph, int scale) {
+                        const struct bitmap_glyph *glyph, bool ink) {
     for (int row = 0; row < glyph->height; row++) {
         for (int col = 0; col < glyph->width; col++) {
             if (glyph->pixels[row * glyph->width + col] == 'X') {
-                fill_rect(widget, x + col * scale, y + row * scale, scale, scale, true);
+                set_pixel(widget, x + col, y + row, ink);
             }
         }
     }
 }
 
-static int text_width(const char *text, int scale, const struct bitmap_glyph *glyphs,
-                      size_t glyph_count) {
-    int width = 0;
-
-    for (const char *cursor = text; *cursor != '\0'; cursor++) {
-        if (*cursor == ' ') {
-            width += 3 * scale;
-            continue;
-        }
-
-        const struct bitmap_glyph *glyph = find_glyph(glyphs, glyph_count, *cursor);
-        if (glyph != NULL) {
-            width += (glyph->width + 1) * scale;
-        }
-    }
-
-    return MAX(0, width - scale);
+static int text_width(const char *text, const struct bitmap_font *font) {
+    return strlen(text) * font->advance;
 }
 
-static int draw_text(struct zmk_widget_screen *widget, int x, int y, const char *text, int scale,
-                     const struct bitmap_glyph *glyphs, size_t glyph_count) {
+static int draw_text(struct zmk_widget_screen *widget, int x, int y, const char *text,
+                     const struct bitmap_font *font) {
     int cursor_x = x;
 
     for (const char *cursor = text; *cursor != '\0'; cursor++) {
-        if (*cursor == ' ') {
-            cursor_x += 3 * scale;
-            continue;
+        if (*cursor != ' ') {
+            const struct bitmap_glyph *glyph = find_glyph(font->glyphs, font->glyph_count, *cursor);
+            if (glyph != NULL) {
+                draw_bitmap(widget, cursor_x, y + font->y_offset, glyph, true);
+            }
         }
-
-        const struct bitmap_glyph *glyph = find_glyph(glyphs, glyph_count, *cursor);
-        if (glyph != NULL) {
-            draw_bitmap(widget, cursor_x, y, glyph, scale);
-            cursor_x += (glyph->width + 1) * scale;
-        }
+        cursor_x += font->advance;
     }
 
-    return MAX(0, cursor_x - x - scale);
+    return cursor_x - x;
 }
 
-#define STATUS_TEXT_WIDTH(text, scale)                                                         \
-    text_width((text), (scale), status_glyphs, ARRAY_SIZE(status_glyphs))
-#define DRAW_STATUS_TEXT(widget, x, y, text, scale)                                            \
-    draw_text((widget), (x), (y), (text), (scale), status_glyphs, ARRAY_SIZE(status_glyphs))
-#define LAYER_TEXT_WIDTH(text, scale)                                                          \
-    text_width((text), (scale), layer_glyphs, ARRAY_SIZE(layer_glyphs))
-#define DRAW_LAYER_TEXT(widget, x, y, text, scale)                                             \
-    draw_text((widget), (x), (y), (text), (scale), layer_glyphs, ARRAY_SIZE(layer_glyphs))
+#define SMALL_TEXT_WIDTH(text) text_width((text), &small_font)
+#define DRAW_SMALL_TEXT(widget, x, y, text) \
+    draw_text((widget), (x), (y), (text), &small_font)
+#define STATUS_TEXT_WIDTH(text) text_width((text), &status_font)
+#define DRAW_STATUS_TEXT(widget, x, y, text) \
+    draw_text((widget), (x), (y), (text), &status_font)
+#define TITLE_TEXT_WIDTH(text) text_width((text), &title_font)
+#define DRAW_TITLE_TEXT(widget, x, y, text) \
+    draw_text((widget), (x), (y), (text), &title_font)
+#define LAYER_TEXT_WIDTH(text) text_width((text), &layer_font)
+#define DRAW_LAYER_TEXT(widget, x, y, text) \
+    draw_text((widget), (x), (y), (text), &layer_font)
 
 static void draw_signal_bars(struct zmk_widget_screen *widget, int x, int y) {
     fill_rect(widget, x, y + 6, 3, 4, true);
@@ -480,20 +274,20 @@ static void draw_power_band(struct zmk_widget_screen *widget) {
         }
     }
 
-    int host_width = DRAW_STATUS_TEXT(widget, CANVAS_PADDING, POWER_CONTENT_Y, host_label, 2);
+    int host_width = DRAW_STATUS_TEXT(widget, CANVAS_PADDING, POWER_CONTENT_Y, host_label);
     if (state->usb_powered && widget->animation.local_bolt_visible) {
-        draw_bitmap(widget, CANVAS_PADDING + host_width + 6, 7, &bolt_icon, 2);
+        draw_bitmap(widget, CANVAS_PADDING + host_width + 6, 7, &bolt_icon, true);
     }
     draw_battery_bar(widget, CANVAS_PADDING, state->battery_left, true);
 
     if (state->right_connected) {
         draw_signal_bars(widget, 76, POWER_CONTENT_Y);
         if (state->right_usb_powered && widget->animation.right_bolt_visible) {
-            draw_bitmap(widget, 93, 7, &bolt_icon, 2);
+            draw_bitmap(widget, 93, 7, &bolt_icon, true);
         }
     } else {
-        draw_bitmap(widget, 76, POWER_CONTENT_Y, &cross_icon, 2);
-        DRAW_STATUS_TEXT(widget, 90, POWER_CONTENT_Y, "OFF", 2);
+        draw_bitmap(widget, 76, POWER_CONTENT_Y, &cross_icon, true);
+        DRAW_STATUS_TEXT(widget, 90, POWER_CONTENT_Y, "OFF");
     }
     draw_battery_bar(widget, 76, state->battery_right, state->right_connected);
 }
@@ -514,11 +308,11 @@ static const char *layer_name(uint8_t layer_index, char *fallback, size_t fallba
 static void draw_layer_band(struct zmk_widget_screen *widget) {
     char fallback[6];
     const char *name = layer_name(widget->state.layer_index, fallback, sizeof(fallback));
-    int width = LAYER_TEXT_WIDTH(name, 4);
+    int width = LAYER_TEXT_WIDTH(name);
     int x = (SCREEN_WIDTH - width + 1) / 2;
 
     clear_rows(widget, LAYER_Y, LAYER_HEIGHT);
-    DRAW_LAYER_TEXT(widget, x, LAYER_Y, name, 4);
+    DRAW_LAYER_TEXT(widget, x, LAYER_Y, name);
 }
 
 static void draw_dotted_underline(struct zmk_widget_screen *widget, int x, int y, int width) {
@@ -530,14 +324,14 @@ static void draw_dotted_underline(struct zmk_widget_screen *widget, int x, int y
 
 static void draw_bt_band(struct zmk_widget_screen *widget) {
     clear_rows(widget, BT_Y, BT_HEIGHT);
-    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 84, "BT", 2);
+    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 84, "BT");
 
     for (int i = 0; i < TOUCAN_BT_PROFILE_COUNT; i++) {
         int slot_x = 38 + i * 20;
 
         if (widget->state.profiles_bonded[i]) {
             char digit[] = {(char)('1' + i), '\0'};
-            DRAW_STATUS_TEXT(widget, slot_x + 4, 84, digit, 2);
+            DRAW_STATUS_TEXT(widget, slot_x + 4, 84, digit);
         } else {
             fill_rect(widget, slot_x + 8, 89, 2, 2, true);
         }
@@ -555,7 +349,7 @@ static void draw_bt_band(struct zmk_widget_screen *widget) {
 
 static void draw_memory_band(struct zmk_widget_screen *widget) {
     clear_rows(widget, MEMORY_Y, MEMORY_HEIGHT);
-    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 116, "ME", 2);
+    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 116, "ME");
 
     for (int i = 0; i < TOUCAN_MEMORY_SLOT_COUNT; i++) {
         int slot_x = 38 + i * 20;
@@ -571,20 +365,13 @@ static void draw_memory_band(struct zmk_widget_screen *widget) {
         if (type != TOUCAN_MEMORY_SLOT_EMPTY) {
             char digit[] = {(char)('1' + i), '\0'};
             if (inverted) {
-                const struct bitmap_glyph *glyph = find_glyph(status_glyphs,
-                                                               ARRAY_SIZE(status_glyphs), digit[0]);
+                const struct bitmap_glyph *glyph =
+                    find_glyph(status_font.glyphs, status_font.glyph_count, digit[0]);
                 if (glyph != NULL) {
-                    for (int row = 0; row < glyph->height; row++) {
-                        for (int col = 0; col < glyph->width; col++) {
-                            if (glyph->pixels[row * glyph->width + col] == 'X') {
-                                fill_rect(widget, slot_x + 4 + col * 2, 116 + row * 2, 2, 2,
-                                          false);
-                            }
-                        }
-                    }
+                    draw_bitmap(widget, slot_x + 4, 116 + status_font.y_offset, glyph, false);
                 }
             } else {
-                DRAW_STATUS_TEXT(widget, slot_x + 4, 116, digit, 2);
+                DRAW_STATUS_TEXT(widget, slot_x + 4, 116, digit);
             }
 
             if (type == TOUCAN_MEMORY_SLOT_SEQUENCE && !inverted) {
@@ -600,12 +387,14 @@ static void draw_system_band(struct zmk_widget_screen *widget) {
     clear_rows(widget, SYSTEM_Y, SYSTEM_HEIGHT);
 
     if (widget->state.caps_lock) {
-        DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 148, "CAPS", 2);
+        DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 148, "CAPS");
     }
 
-    const char *platform = widget->state.windows_mode ? "WIN" : "MAC";
-    int width = STATUS_TEXT_WIDTH(platform, 2);
-    DRAW_STATUS_TEXT(widget, 136 - width, 148, platform, 2);
+    const struct bitmap_glyph *platform =
+        widget->state.windows_mode ? &windows_icon : &apple_icon;
+    int x = SCREEN_WIDTH - CANVAS_PADDING - platform->width;
+    int y = SYSTEM_Y + (SYSTEM_HEIGHT - platform->height) / 2;
+    draw_bitmap(widget, x, y, platform, true);
 }
 
 static void invalidate_rows(struct zmk_widget_screen *widget, int y, int height) {
@@ -695,12 +484,12 @@ static void draw_sleep_page(struct zmk_widget_screen *widget) {
     draw_disc(widget, 72, 52, 24, true);
     draw_disc(widget, 81, 45, 21, false);
 
-    int width = LAYER_TEXT_WIDTH("SLEEP", 3);
-    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 96, "SLEEP", 3);
+    int width = TITLE_TEXT_WIDTH("SLEEP");
+    DRAW_TITLE_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 96, "SLEEP");
 
     format_host_label(&widget->state, host_label, sizeof(host_label));
-    width = STATUS_TEXT_WIDTH(host_label, 2);
-    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 122, host_label, 2);
+    width = STATUS_TEXT_WIDTH(host_label);
+    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 122, host_label);
     draw_sleep_battery_bar(widget, CANVAS_PADDING, widget->state.battery_left, true);
     draw_sleep_battery_bar(widget, 76, widget->state.battery_right,
                            widget->state.right_connected);
@@ -728,10 +517,10 @@ static void draw_soft_off_page(struct zmk_widget_screen *widget) {
     fill_rect(widget, 66, 19, 13, 10, false);
     fill_rect(widget, 70, 22, 4, 14, true);
 
-    int width = LAYER_TEXT_WIDTH("OFF", 3);
-    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 68, "OFF", 3);
-    width = STATUS_TEXT_WIDTH("WAKE KEYS", 2);
-    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 94, "WAKE KEYS", 2);
+    int width = TITLE_TEXT_WIDTH("OFF");
+    DRAW_TITLE_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 68, "OFF");
+    width = STATUS_TEXT_WIDTH("WAKE KEYS");
+    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 94, "WAKE KEYS");
 
     uint8_t positions[8];
     size_t count = toucan_soft_power_wake_positions(positions, ARRAY_SIZE(positions));
@@ -762,21 +551,21 @@ static void draw_uf2_page(struct zmk_widget_screen *widget) {
     }
     fill_rect(widget, 60, 52, 24, 3, true);
 
-    int width = LAYER_TEXT_WIDTH("UF2", 4);
-    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 66, "UF2", 4);
-    width = STATUS_TEXT_WIDTH("COPY .UF2", 2);
-    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 98, "COPY .UF2", 2);
+    int width = LAYER_TEXT_WIDTH("UF2");
+    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 66, "UF2");
+    width = STATUS_TEXT_WIDTH("COPY .UF2");
+    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 98, "COPY .UF2");
 }
 
 static void draw_boot_page(struct zmk_widget_screen *widget) {
-    int width = LAYER_TEXT_WIDTH("TOUCAN", 3);
-    DRAW_LAYER_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 60, "TOUCAN", 3);
+    int width = TITLE_TEXT_WIDTH("TOUCAN");
+    DRAW_TITLE_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 60, "TOUCAN");
 
     char version[32];
     snprintf(version, sizeof(version), "ZMK %s * %s", TOUCAN_FIRMWARE_VERSION,
              TOUCAN_GIT_SHA);
-    width = STATUS_TEXT_WIDTH(version, 1);
-    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 94, version, 1);
+    width = SMALL_TEXT_WIDTH(version);
+    DRAW_SMALL_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 94, version);
 }
 
 struct content_cursor {
@@ -821,36 +610,40 @@ static void draw_content_text(struct zmk_widget_screen *widget, struct content_c
         }
 
         char glyph_text[] = {*character, '\0'};
-        int width = STATUS_TEXT_WIDTH(glyph_text, 2) + 2;
+        int width = STATUS_TEXT_WIDTH(glyph_text);
         if (!content_wrap(cursor, width)) {
             break;
         }
-        cursor->x += DRAW_STATUS_TEXT(widget, cursor->x, cursor->y, glyph_text, 2) + 2;
+        cursor->x += DRAW_STATUS_TEXT(widget, cursor->x, cursor->y, glyph_text);
     }
 }
 
+static const struct bitmap_glyph *gui_modifier_icon(bool windows_mode) {
+    return windows_mode ? &windows_icon : &command_icon;
+}
+
 static void draw_modifier_icon(struct zmk_widget_screen *widget, struct content_cursor *cursor,
-                               int icon_index) {
-    if (!content_wrap(cursor, 18)) {
+                               const struct bitmap_glyph *icon) {
+    if (!content_wrap(cursor, icon->width + 2)) {
         return;
     }
-    draw_bitmap(widget, cursor->x, cursor->y - 2, &modifier_icons[icon_index], 2);
-    cursor->x += 22;
+    draw_bitmap(widget, cursor->x, cursor->y - 2, icon, true);
+    cursor->x += icon->width + 6;
 }
 
 static void draw_implicit_modifier_icons(struct zmk_widget_screen *widget,
                                          struct content_cursor *cursor, uint8_t modifiers) {
     if ((modifiers & (MOD_LGUI | MOD_RGUI)) != 0U) {
-        draw_modifier_icon(widget, cursor, widget->state.windows_mode ? 4 : 0);
+        draw_modifier_icon(widget, cursor, gui_modifier_icon(widget->state.windows_mode));
     }
     if ((modifiers & (MOD_LCTL | MOD_RCTL)) != 0U) {
-        draw_modifier_icon(widget, cursor, 2);
+        draw_modifier_icon(widget, cursor, &control_icon);
     }
     if ((modifiers & (MOD_LALT | MOD_RALT)) != 0U) {
-        draw_modifier_icon(widget, cursor, 3);
+        draw_modifier_icon(widget, cursor, &option_icon);
     }
     if ((modifiers & (MOD_LSFT | MOD_RSFT)) != 0U) {
-        draw_modifier_icon(widget, cursor, 1);
+        draw_modifier_icon(widget, cursor, &shift_icon);
     }
 }
 
@@ -920,18 +713,18 @@ static void draw_sequence_content(struct zmk_widget_screen *widget, struct conte
             switch (action->keycode) {
             case HID_USAGE_KEY_KEYBOARD_LEFTCONTROL:
             case HID_USAGE_KEY_KEYBOARD_RIGHTCONTROL:
-                draw_modifier_icon(widget, cursor, 2);
+                draw_modifier_icon(widget, cursor, &control_icon);
                 break;
             case HID_USAGE_KEY_KEYBOARD_LEFTSHIFT:
             case HID_USAGE_KEY_KEYBOARD_RIGHTSHIFT:
-                draw_modifier_icon(widget, cursor, 1);
+                draw_modifier_icon(widget, cursor, &shift_icon);
                 break;
             case HID_USAGE_KEY_KEYBOARD_LEFTALT:
             case HID_USAGE_KEY_KEYBOARD_RIGHTALT:
-                draw_modifier_icon(widget, cursor, 3);
+                draw_modifier_icon(widget, cursor, &option_icon);
                 break;
             default:
-                draw_modifier_icon(widget, cursor, widget->state.windows_mode ? 4 : 0);
+                draw_modifier_icon(widget, cursor, gui_modifier_icon(widget->state.windows_mode));
                 break;
             }
             continue;
@@ -951,11 +744,11 @@ static void draw_memory_set_page(struct zmk_widget_screen *widget) {
     const struct toucan_memory_capture_snapshot *capture = &widget->state.memory.capture;
     char header[8];
     snprintf(header, sizeof(header), "MEM %u", capture->slot + 1U);
-    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, CANVAS_PADDING, header, 2);
+    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, CANVAS_PADDING, header);
 
     const char *mode = capture->mode == TOUCAN_MEMORY_CAPTURE_SEQUENCE ? "SEQ" : "TEXT";
-    int width = STATUS_TEXT_WIDTH(mode, 2);
-    DRAW_STATUS_TEXT(widget, 136 - width, CANVAS_PADDING, mode, 2);
+    int width = STATUS_TEXT_WIDTH(mode);
+    DRAW_STATUS_TEXT(widget, 136 - width, CANVAS_PADDING, mode);
     for (int x = CANVAS_PADDING; x < 136; x += 2) {
         set_pixel(widget, x, 26, true);
     }
@@ -968,8 +761,8 @@ static void draw_memory_set_page(struct zmk_widget_screen *widget) {
     if (capture->mode == TOUCAN_MEMORY_CAPTURE_SEQUENCE) {
         draw_sequence_content(widget, &cursor);
         if (capture->sequence_overflow) {
-            width = STATUS_TEXT_WIDTH("FULL", 1);
-            DRAW_STATUS_TEXT(widget, 136 - width, 154, "FULL", 1);
+            width = SMALL_TEXT_WIDTH("FULL");
+            DRAW_SMALL_TEXT(widget, 136 - width, 154, "FULL");
         }
     } else {
         draw_content_text(widget, &cursor, capture->text);
@@ -977,12 +770,12 @@ static void draw_memory_set_page(struct zmk_widget_screen *widget) {
         snprintf(counter, sizeof(counter), "%u/64",
                  (unsigned int)limited_text_length(capture->text,
                                                    TOUCAN_MEMORY_TEXT_CAPACITY));
-        width = STATUS_TEXT_WIDTH(counter, 1);
-        DRAW_STATUS_TEXT(widget, 136 - width, 154, counter, 1);
+        width = SMALL_TEXT_WIDTH(counter);
+        DRAW_SMALL_TEXT(widget, 136 - width, 154, counter);
     }
 
     if (widget->animation.caret_visible && content_wrap(&cursor, 5)) {
-        fill_rect(widget, cursor.x + 1, cursor.y, 3, 12, true);
+        fill_rect(widget, cursor.x + 1, cursor.y, 3, status_font.cap_height, true);
     }
 }
 

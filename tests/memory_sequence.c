@@ -389,7 +389,7 @@ static void test_raw_chords_and_boundaries(void) {
     for (size_t i = 0; i < sizeof(modifiers) / sizeof(modifiers[0]); i++) {
         reset();
         event(modifiers[i], true, 0, 0);
-        text("ctrlshiftp");
+        text("ctrlshiftpdel");
         event(modifiers[i], false, 0, 0);
         unchanged();
     }
@@ -482,6 +482,143 @@ static void test_rollovers(void) {
     action(3, key('s'), false, MOD_LCTL, 0);
 }
 
+static void delete_tap(size_t index, uint8_t modifiers,
+                       const uint8_t order[TOUCAN_MEMORY_MODIFIER_COUNT]) {
+    action(index, HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD, true, modifiers, 0);
+    action(index + 1, HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD, false, modifiers, 0);
+    icon_order(index, order);
+    icon_order(index + 1, order);
+    assert(output.preview[index].implicit_modifiers == 0U);
+    assert(output.preview[index + 1].implicit_modifiers == 0U);
+}
+
+static void test_del_shorthand(void) {
+    const uint8_t no_modifiers[TOUCAN_MEMORY_MODIFIER_COUNT] = {0};
+    reset();
+    text("d");
+    taps("d", NULL);
+    text("e");
+    taps("de", NULL);
+    event(key('l'), true, 0, 0);
+    compile(); /* Complete on key-down, without waiting for key-up or save. */
+    assert(!result.overflow && result.count == 2);
+    delete_tap(0, 0, no_modifiers);
+    event(key('l'), false, 0, 0);
+    text("del");
+    compile();
+    assert(!result.overflow && result.count == 4);
+    delete_tap(0, 0, no_modifiers);
+    delete_tap(2, 0, no_modifiers); /* Repeated names are separate Delete taps. */
+
+    const struct {
+        const char *input;
+        uint8_t modifiers;
+        uint8_t order[TOUCAN_MEMORY_MODIFIER_COUNT];
+    } cases[] = {
+        {"del", 0, {0}},
+        {"DEL", 0, {0}},
+        {"DeL", 0, {0}},
+        {"cmddel", MOD_LGUI, {MOD_LGUI}},
+        {"shiftcmddel", MOD_LSFT | MOD_LGUI, {MOD_LSFT, MOD_LGUI}},
+        {"cmdshiftdel", MOD_LGUI | MOD_LSFT, {MOD_LGUI, MOD_LSFT}},
+        {"ctrlaltdel", MOD_LCTL | MOD_LALT, {MOD_LCTL, MOD_LALT}},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        reset();
+        text(cases[i].input);
+        text("a");
+        compile();
+        assert(!result.overflow && result.count == 4);
+        delete_tap(0, cases[i].modifiers, cases[i].order);
+        action(2, key('a'), true, 0, 0); /* Delete consumes the pending modifiers. */
+        action(3, key('a'), false, 0, 0);
+    }
+
+    reset();
+    text("model");
+    compile(); /* Like modifier names, del is reserved even inside words. */
+    assert(!result.overflow && result.count == 6);
+    delete_tap(4, 0, no_modifiers);
+    decoded_characters(true, false, "mo");
+
+    reset();
+    text("delctrl");
+    compile();
+    assert(!result.overflow && result.count == 4);
+    delete_tap(0, 0, no_modifiers);
+    action(2, HID_USAGE_KEY_KEYBOARD_LEFTCONTROL, true, 0, 0);
+    action(3, HID_USAGE_KEY_KEYBOARD_LEFTCONTROL, false, 0, 0);
+
+    reset();
+    text("de");
+    event(HID_USAGE_KEY_KEYBOARD_RETURN_ENTER, true, 0, 0);
+    event(HID_USAGE_KEY_KEYBOARD_RETURN_ENTER, false, 0, 0);
+    text("l");
+    unchanged(); /* A name cannot cross another key or physical modifier change. */
+    reset();
+    text("d");
+    event(HID_USAGE_KEY_KEYBOARD_RIGHTSHIFT, true, 0, 0);
+    text("el");
+    event(HID_USAGE_KEY_KEYBOARD_RIGHTSHIFT, false, 0, 0);
+    unchanged();
+
+    reset();
+    event(HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, true, 0, 0);
+    text("del");
+    event(HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, false, 0, 0);
+    compile();
+    assert(!result.overflow && result.count == 4);
+    action(0, HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, true, 0, 0);
+    delete_tap(1, 0, no_modifiers);
+    action(3, HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, false, 0, 0);
+
+    reset();
+    event(key('d'), true, 0, 0);
+    event(key('e'), true, 0, 0);
+    event(key('d'), false, 0, 0);
+    event(key('l'), true, 0, 0);
+    event(key('a'), true, 0, 0);
+    event(key('e'), false, 0, 0);
+    event(key('l'), false, 0, 0);
+    event(key('a'), false, 0, 0);
+    compile();
+    assert(!result.overflow && result.count == 4);
+    delete_tap(0, 0, no_modifiers);
+    action(2, key('a'), true, 0, 0);
+    action(3, key('a'), false, 0, 0);
+
+    /* Synthetic taps must never steal a release belonging to a real input key,
+     * including a physically held Delete key with the same usage. */
+    const uint16_t held_keys[] = {HID_USAGE_KEY_KEYBOARD_A, HID_USAGE_KEY_KEYBOARD_DELETE_FORWARD};
+    for (size_t i = 0; i < sizeof(held_keys) / sizeof(held_keys[0]); i++) {
+        reset();
+        event(held_keys[i], true, 0, 0);
+        text("cmddel");
+        event(held_keys[i], false, 0, 0);
+        compile();
+        assert(!result.overflow && result.count == 4);
+        action(0, held_keys[i], true, 0, 0);
+        delete_tap(1, MOD_LGUI, (uint8_t[]){MOD_LGUI, 0, 0, 0});
+        action(3, held_keys[i], false, 0, 0);
+        icon_order(3, no_modifiers);
+    }
+
+    reset();
+    for (size_t i = 0; i < 31; i++) {
+        text("del");
+    }
+    text("de");
+    compile();
+    assert(result.overflow);
+    text("l");
+    compile(); /* Completing del can bring provisional output back within the limit. */
+    assert(!result.overflow && result.count == TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY);
+    delete_tap(62, 0, no_modifiers);
+    text("del");
+    compile();
+    assert(result.overflow && result.count == TOUCAN_MEMORY_SEQUENCE_ACTION_CAPACITY);
+}
+
 static void test_bounds(void) {
     reset();
     for (int i = 0; i < 32; i++) {
@@ -526,7 +663,8 @@ int main(void) {
     test_rollovers();
     test_named_modifier_preview();
     test_modifier_order();
+    test_del_shorthand();
     test_bounds();
-    puts("PASS: modifier entry order, literal labels, playback, case, rollover, and bounds");
+    puts("PASS: del shorthand, modifier order, literal labels, playback, rollover, and bounds");
     return 0;
 }

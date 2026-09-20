@@ -24,10 +24,10 @@
         base {
             display-name = "BASE";
             bindings = <
-                &kp ESC                   &any_layer_tap TOUCAN_NAV Q  &kp W                      &kp E                      &kp R                 &kp T                      &kp Y     &kp U     &kp I         &kp O   &any_layer_tap TOUCAN_NAV P      &kp BSLH
-                &left_mod_tap LCTRL EQUAL &left_layer_tap TOUCAN_SYM A &s_layer_tap TOUCAN_CLIP S &d_layer_tap TOUCAN_EDIT D &kp F                 &kp G                      &kp H     &kp J     &kp K         &kp L   &right_layer_tap TOUCAN_SYM SEMI &right_mod_tap RCTRL SQT
-                &kp MINUS                 &left_mod_tap LSHFT Z        &kp X                      &c_layer_tap TOUCAN_APP C  &kp V                 &kp B                      &kp N     &kp M     &kp COMMA     &kp DOT &right_mod_tap RSHFT FSLH        &kp UNDER
-                                                                                                  &mo TOUCAN_SYS             &thumb_cmd_tap 0 BSPC &thumb_mod_tap LALT TAB    &kp ENTER &kp SPACE &mo TOUCAN_FN
+                &kp ESC                   &any_layer_tap TOUCAN_NAV Q  &kp W                      &kp E                      &kp R    &kp T                   &kp Y                     &kp U     &kp I         &kp O   &any_layer_tap TOUCAN_NAV P      &kp BSLH
+                &left_mod_tap LCTRL EQUAL &left_layer_tap TOUCAN_SYM A &s_layer_tap TOUCAN_CLIP S &d_layer_tap TOUCAN_EDIT D &kp F    &kp G                   &kp H                     &kp J     &kp K         &kp L   &right_layer_tap TOUCAN_SYM SEMI &right_mod_tap RCTRL SQT
+                &kp MINUS                 &left_mod_tap LSHFT Z        &kp X                      &c_layer_tap TOUCAN_APP C  &kp V    &kp B                   &kp N                     &kp M     &kp COMMA     &kp DOT &right_mod_tap RSHFT FSLH        &kp UNDER
+                                                                                                  &mo TOUCAN_SYS             &kp BSPC &thumb_cmd_tap 0 TAB    &thumb_mod_tap LALT ENTER &kp SPACE &mo TOUCAN_FN
             >;
         };
 
@@ -94,10 +94,10 @@
         system {
             display-name = "SYS";
             bindings = <
-                &bt_clear_guard 0 0 &bt BT_SEL 0     &bt BT_SEL 1     &bt BT_SEL 2     &bt BT_SEL 3     &bt BT_SEL 4        &trans &trans &trans &trans &trans &trans
-                &memory_mode        &memory_slot 0 0 &memory_slot 1 1 &memory_slot 2 2 &memory_slot 3 3 &memory_slot 4 4    &trans &trans &trans &trans &trans &trans
-                &trans              &trans           &trans           &trans           &trans           &trans              &trans &trans &trans &trans &trans &trans
-                                                                      &trans           &trans           &trans              &trans &trans &trans
+                &trans              &kp LC(LS(LA(LG(A)))) &kp LC(LS(LA(LG(V)))) &trans           &trans           &trans              &trans &trans &trans &trans &trans &trans
+                &memory_mode        &memory_slot 0 0      &memory_slot 1 1      &memory_slot 2 2 &memory_slot 3 3 &memory_slot 4 4    &trans &trans &trans &trans &trans &trans
+                &bt_clear_guard 0 0 &bt BT_SEL 0          &bt BT_SEL 1          &bt BT_SEL 2     &bt BT_SEL 3     &bt BT_SEL 4        &trans &trans &trans &trans &trans &trans
+                                                                                &trans           &trans           &trans              &trans &trans &trans
             >;
         };
 

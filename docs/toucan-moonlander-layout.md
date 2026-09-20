@@ -19,15 +19,20 @@ Esc        Q/NAV    W       E       R       T       | Y       U       I       O 
 Equal/Ctrl A/SYM    S/CLIP  D/EDIT  F       G       | H       J       K       L       Semicolon/SYM Quote/Ctrl
 Minus      Z/Shift  X       C/APP   V       B       | N       M       Comma   Dot     Slash/Shift  Underscore
 
-                                SYS  Backspace/Cmd  Tab/Option | Enter  Space  FN
+                                SYS  Backspace  Tab/Cmd | Enter/Option  Space  FN
 ```
 
 The thumb row is shown from the outside of the left half to the outside of the
-right half. Backspace/Command, Tab/Option, Enter, and Space occupy the easier
+right half. Backspace, Tab/Command, Enter/Option, and Space occupy the easier
 inner thumb positions. The harder outer thumbs are dedicated momentary layer
-keys. The Backspace thumb sends Backspace on tap and holds Command on macOS or
-Control in Windows mode; the Tab thumb sends Tab on tap and holds left
-Option/Alt.
+keys. The left Tab thumb sends Tab on tap and holds Command on macOS or
+Control in Windows mode. The right Enter thumb sends Enter on tap and holds
+left Option/Alt (ordinary Alt, not AltGr, in Windows mode). Backspace and Space
+remain single-role.
+
+For Option+Command+P on BASE, hold left Tab and right Enter, then tap and
+release P before releasing the thumbs. This puts the two modifiers on separate
+thumbs. NAV retains its dedicated Command/Control and Alt thumb bindings.
 
 ## Layers and access
 
@@ -42,7 +47,7 @@ The display uses the short names shown below.
 | 4 | `EDIT` | `EDT` | Hold D, then use S/F | Undo and redo |
 | 5 | `APP` | `APP` | Hold C, then use X/V | Cycle backward/forward through applications |
 | 6 | `MOUSE` | `MOU` | Touch the trackpad | Opaque pointer controls, D/F scroll, and thumb buttons |
-| 7 | `SYS` | `SYS` | Hold outer-left thumb | Bluetooth profiles and five persistent memory slots |
+| 7 | `SYS` | `SYS` | Hold outer-left thumb | Bluetooth profiles, five persistent memory slots, and Hyper shortcuts |
 | 8 | `FN` | `FN` | Hold outer-right thumb | Diagnostics, F-keys, media, and platform mode |
 | 9 | `DANGER` | `DNG` | Hold both outer thumbs | Side-local bootloader and reset |
 
@@ -72,11 +77,12 @@ Position filters still limit which targets can select a hold before 200 ms:
   require an opposite-hand target.
 - S can select CLIP only with D/F, D can select EDIT only with S/F, and C can
   select APP only with X/V.
-- Q/P and the Backspace/Command and Tab/Option thumbs have no position filter.
+- Q/P and the Tab/Command and Enter/Option thumbs have no position filter.
 
-The thumbs alone also have a 200 ms quick-tap window: tap the key and press it
-again within 200 ms of the first press to hold and repeat its tap behavior
-instead of engaging its modifier.
+The dual-role thumbs also have a 200 ms quick-tap window: tap the key and press
+it again within 200 ms of the first press to hold and repeat its tap behavior
+instead of engaging its modifier. Backspace repeats normally without a hold-tap
+delay.
 
 For example, pressing A, pressing N, releasing A, then releasing N within
 200 ms types `an`, not `-`. The same release order with Quote and S types `'s`,
@@ -165,20 +171,26 @@ is deliberately not stored in this repository.
 
 ## System layer (`SYS`)
 
-Hold the outer-left thumb. Bluetooth occupies the left top row; persistent
-memory occupies the left home row:
+Hold the outer-left thumb. Hyper shortcuts occupy Q/W on the left top row;
+persistent memory occupies the left home row; Bluetooth occupies the bottom row:
 
 ```text
-BT_CLR   BT1   BT2   BT3   BT4   BT5 | ___  ___  ___  ___  ___  ___
-MEM_CLR  MEM1  MEM2  MEM3  MEM4  MEM5 | ___  ___  ___  ___  ___  ___
-___      ___   ___   ___   ___   ___ | ___  ___  ___  ___  ___  ___
+___      Hyper+A  Hyper+V  ___   ___   ___ | ___  ___  ___  ___  ___  ___
+MEM_CLR  MEM1     MEM2     MEM3  MEM4  MEM5 | ___  ___  ___  ___  ___  ___
+BT_CLR   BT1      BT2      BT3   BT4   BT5 | ___  ___  ___  ___  ___  ___
 
-                         ___  ___  ___ | ___  ___  ___
+                                  ___  ___  ___ | ___  ___  ___
 ```
 
-BT1-BT5 select ZMK profiles 0-4. Tapping BT_CLR is inert. Hold BT_CLR for two
-seconds to clear only the currently selected profile; it does not clear every
-bond. The display's five profile slots use the user-facing labels 1-5.
+SYS+Q sends Hyper+A and SYS+W sends Hyper+V. Hyper means
+Ctrl+Shift+Alt+GUI (Control+Shift+Option+Command on macOS). These are ordinary
+key bindings with all four modifiers, not hold-taps or tap dances, and do not
+change with the macOS/Windows platform mode.
+
+BT1-BT5 on Z/X/C/V/B select ZMK profiles 0-4. BT_CLR is on Minus; tapping it is
+inert. Hold it for two seconds to clear only the currently selected profile;
+it does not clear every bond. The display's five profile slots use the
+user-facing labels 1-5.
 
 For a memory slot:
 
@@ -190,8 +202,8 @@ For a memory slot:
 - Hold MEM_CLR and tap a slot to erase only that slot.
 
 SEQ stores up to 64 resolved press/release actions, including chords,
-modifiers, Enter, and Escape, with the typed modifier-name shorthand below.
-TEXT stores literal text up to 64 characters and never interprets modifier names.
+modifiers, Enter, and Escape, with the typed shorthand below.
+TEXT stores literal text up to 64 characters and never interprets shorthand names.
 While capture is active, the physical SYS thumb becomes the control key:
 
 - Single-tap SYS to switch SEQ/TEXT, but only while the capture is empty.
@@ -217,6 +229,13 @@ are case-insensitive; ordinary letters retain their original case. Enter names
 and the target consecutively, without spaces: a space is a recorded key, not
 a separator.
 
+The named target `del` records **forward Delete**, displayed as `DEL`. It uses
+the same case-insensitive, immediate recognition as the modifier names:
+`cmddel` records Cmd+Delete, and `shiftcmddel` shows Shift, Cmd, then `DEL`.
+Delete consumes the pending modifiers, so `cmddela` records Cmd+Delete followed
+by an unmodified `a`. `deldel` records two Delete taps. This records a key for
+playback; it does **not** erase the last item from the capture or mean Backspace.
+
 - Names combine and apply to the next non-modifier key: `ctrlshiftp` records
   Ctrl+Shift+P, `cmdc` records GUI+C, and `ctrlsctrlc` records Ctrl+S then Ctrl+C.
   `cmd` always means left GUI, regardless of the macOS/Windows mode.
@@ -237,9 +256,10 @@ a separator.
   a target presses the modifiers in entry order and releases them in reverse,
   never leaving a stuck hold.
 - These short names are reserved even inside words: `shifted` records Shift+E
-  then D. Use TEXT to preserve literal words containing them. A non-letter
-  press or physical modifier change breaks a name; letters already chorded
-  with Ctrl, Alt, or GUI are not interpreted as names.
+  then D, and `model` records `m`, `o`, then Delete. Use TEXT to preserve literal
+  words containing them. A non-letter press or physical modifier change breaks
+  a name; letters already chorded with Ctrl, Alt, or GUI are not interpreted as
+  names.
 
 The capture retains up to 1,024 source events while compiling them to the
 64-action saved sequence. If either limit is exceeded, MEM SET shows `FULL`
@@ -264,6 +284,7 @@ ___     Battery  F1  F2  F3  F10 | ___         Mode  ___       ___   ___  ___
   available result is typed through the selected USB/BLE endpoint as
   `left=NNNNmv` or `right=NNNNmv`, followed by Enter.
 - Mode toggles and persists the macOS/Windows shortcut mode.
+  The dashboard footer shows an Apple logo for macOS or a Windows logo for Windows.
 - F1-F12 use the left-side 3-by-4 arrangement shown above.
 - Volume down, mute, and volume up occupy the top-left three keys of the right
   half.

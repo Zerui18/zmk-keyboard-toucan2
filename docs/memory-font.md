@@ -1,48 +1,90 @@
-# Case-sensitive MEM SET typography
+# Native monospace display typography
 
-MEM SET uses the dashboard's hand-drawn STATUS font, not the old QuinqueFive
-assets. Its source is the `status_glyphs` table in
-[`screen.c`](../boards/shields/nice_view_gem/widgets/screen.c). The same glyph
-lookup and drawing path is used for TEXT characters and SEQ key labels; lookup
-does not fold case.
+All linked text uses **Toucan Display**, a bitmap subset of
+[Terminus Font 4.49.1](https://terminus-font.sourceforge.net/). Its supplied
+bitmap sizes replace both the hand-drawn fonts and the experimental outline
+font conversions. Every ink pixel comes directly from the upstream BDF files:
+there is no rasterization, hinting, smoothing, retouching, or resizing in the
+generation process. The LCD receives only native one-bit pixels, with no font
+engine or dynamic allocation on the keyboard. The legacy QuinqueFive assets
+are not linked.
 
-## Lowercase design
+The checked-in pixel tables are
+[`generated_fonts.h`](../boards/shields/nice_view_gem/assets/generated_fonts.h).
+They preserve the typeface's monospaced advances, horizontal bearings, and
+shared baselines. Spaces have the same advance as other characters, and lookup
+is case-sensitive in both TEXT and SEQ. The small and STATUS sizes cover every
+printable ASCII character. The larger sizes contain the page/layer labels,
+digits for `L<n>` fallbacks, and `?`, rather than unused alphabets.
 
-The original capitals, digits, and punctuation are unchanged. Lowercase is a
-companion alphabet, not scaled-down capitals:
+## Sizes and baseline
 
-| Metric | Source pixels | On MEM SET at 2× |
-| --- | ---: | ---: |
-| Capital/ascender height | 6 | 12 |
-| Lowercase x-height | 4, rows 2–5 | 8 |
-| Baseline | Bottom of row 5 | Bottom of row 11 |
-| Descenders (`g j p q y`) | Rows 6–7 | 4 below baseline |
-| Typical lowercase width | 4 | 8 |
-| Maximum width (`m w`, most capitals) | 5 | 10 |
-| Inter-glyph gap | 1 | 2 |
-| Content line pitch | 9 | 18 |
+| Font | Use | Upstream bitmap | Capital height | Advance | Packed cell |
+| --- | --- | --- | ---: | ---: | ---: |
+| `small_font` | Version, TEXT counter, FULL | `ter-u12n.bdf`, 6×12 normal | 8 | 6 | 6×12 |
+| `status_font` | Dashboard, MEM SET header and content | `ter-u18b.bdf`, 10×18 bold | 12 | 10 | 10×18 |
+| `title_font` | TOUCAN, SLEEP, OFF | `ter-u24b.bdf`, 12×24 bold | 15 | 12 | 12×15 |
+| `layer_font` | Layer names, UF2 | `ter-u32b.bdf`, 16×32 bold | 20 | 16 | 16×20 |
 
-Design rules:
+All measurements are native LCD pixels. Packing removes only top/bottom rows
+that are blank across the selected glyphs; it preserves every ink coordinate
+relative to the original baseline. The larger uppercase subsets need fewer
+rows than their upstream cells. Titles use the supplied 15-pixel capitals,
+not an interpolated 16-pixel size.
 
-- Use one-pixel strokes and square terminals, with the same single-pixel
-  clipped corners as the capitals. No grayscale, antialiasing, or fractional
-  scaling.
-- Keep the bowls of `a b d g o p q` related. Single-storey `a` and `g` leave
-  recognizable counters in the four-row body.
-- Ascenders reach the existing capital height; descenders extend below the
-  shared baseline rather than lifting or shrinking the rest of the letter.
-- Keep `i` narrow with a separated dot, `l` with a hooked terminal, and the
-  existing capital `I` with bars, so mixed-case text remains distinguishable.
-- Share spacing, wrapping, and glyph lookup between both capture modes.
+Text coordinates refer to the top of a capital, not the top of the bitmap cell.
+A font-level `y_offset`
+preserves taller punctuation without cropping or individually recentering it.
+For STATUS, capitals occupy y=0..11, lowercase x-height is 9 pixels, and
+descenders extend up to three pixels below the baseline. The complete glyph
+set spans 18 rows, including punctuation above the capitals.
 
-The missing printable ASCII punctuation is included as well, so apostrophes,
-quotes, brackets, and shifted symbols do not turn into fallback question marks.
-Space advances without a bitmap. Named SEQ control keys (`ENT`, `TAB`, `SPC`,
-`ESC`, `BSP`, `DEL`, `CAP`) and modifier icons remain distinct from literal text.
+MEM content uses a 19-pixel line pitch: the full cell plus one clear row. Six
+lines still fit above the footer. Wrapping and caret bounds reserve space for
+both text and modifier symbols and stop before y=148. The dashboard's capital
+labels and digits remain inside their existing dirty bands. Text advances are
+now truly monospaced rather than retaining the old proportional spacing.
 
-The body reserves room for eight source rows per glyph. It stops before the
-TEXT counter's footer; a wrapped caret uses the same bounds. Descenders cannot
-overlap the next line or the counter.
+Named SEQ control keys (`ENT`, `TAB`, `SPC`, `ESC`, `BSP`, `DEL`, `CAP`) and
+modifier icons remain distinct from literal characters.
+
+## Regenerating the fonts
+
+Change sizes/coverage in
+[`generate-display-font.py`](../scripts/generate-display-font.py), not individual
+pixel rows. The standard-library-only generator downloads the pinned upstream
+source archive into memory and verifies its SHA-256 and bundled license before
+reading the four BDF files. It copies their MSB-first bitmap rows and preserves
+bearings, advances, and baselines. Invalid metrics or padding fail explicitly
+rather than silently clipping or altering artwork.
+
+```sh
+python3 scripts/generate-display-font.py
+python3 scripts/generate-display-font.py --check
+# Offline, using the same unmodified source archive:
+python3 scripts/generate-display-font.py --archive /path/to/terminus-font-4.49.1.tar.gz --check
+```
+
+The source filenames, version, and archive checksum are recorded in the
+generated header. There is no Pillow or FreeType dependency. Normal firmware
+builds, font tests, and SVG specimens use the checked-in rows and need no font
+download.
+
+The upstream font and these derived bitmap tables are distributed under the
+[SIL Open Font License 1.1](../boards/shields/nice_view_gem/assets/Terminus-OFL.txt).
+The subset is named **Toucan Display** to respect the upstream Reserved Font
+Name, “Terminus Font”; source attribution is retained in the generated header.
+The renderer and generator retain the project's MIT license.
+
+## Icons
+
+Hand-edited icon artwork remains separate in
+[`display_icons.h`](../boards/shields/nice_view_gem/assets/display_icons.h).
+Its `X`/`.` rows are native pixels: Apple, Windows, Command, Shift, Control, and
+Option are 16×16; power/disconnect icons are 8×12 and 10×10. Windows shares one
+glyph between the footer and SEQ; Apple is platform-only, and Command retains
+its own SEQ symbol. The procedural moon, power, download, signal, and battery
+shapes also remain native.
 
 ## Case semantics
 
@@ -85,16 +127,21 @@ python3 scripts/preview-memory-font.py /tmp/toucan-memory-font.svg
 ```
 
 Run the host decoder/glyph-lookup and SEQ compiler tests inside the existing
-ZMK builder, plus glyph coverage, case distinction, row-width, and
-baseline/descender checks. Compiler tests cover all 24 modifier orders, pending
-prefixes, target entry, repeated names, and mixed named/physical modifiers.
+ZMK builder, plus glyph coverage, case distinction, row-width, native-detail,
+monospacing, icon-size, label-fit, baseline/descender, and dirty-band checks.
+Offline fingerprints independently derived from the original BDFs verify all
+244 glyphs' ink coordinates and advances. Importer tests cover byte padding,
+bearings, descenders, blank-row removal, and rejection of invalid input.
+Compiler tests cover all 24 modifier orders, pending
+prefixes, target entry, repeated names, mixed named/physical modifiers, and
+`del` taps with independent releases under rollover.
 The native ZMK integration test captures mixed-case content in both modes,
-checks that `ctrl` stays literal in TEXT, and exercises live SEQ names,
-modifier-only playback, and overflow rejection. It checks the distinct icon
-orders and literal `4` labels for `shiftcmd4` and `cmdshift4`, while verifying
-identical Shift+GUI+4 playback. It uses the SYS save/cancel gestures and verifies
-playback and capture privacy. It checks runtime slots, not persistence across
-a power cycle:
+checks that `ctrl` and `del` stay literal in TEXT, and exercises live SEQ names,
+plain and modified Delete taps, modifier-only playback, and overflow rejection.
+It checks the distinct icon orders and literal `4` labels for `shiftcmd4` and
+`cmdshift4`, while verifying identical Shift+GUI+4 playback. It uses the SYS
+save/cancel gestures and verifies playback and capture privacy. It checks
+runtime slots, not persistence across a power cycle:
 
 ```sh
 make test-memory

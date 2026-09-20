@@ -75,7 +75,7 @@
             hold-trigger-key-positions = <TOUCAN_LEFT_POSITIONS>;
         };
 
-        /* Backspace on tap; platform-aware Command/Control on a deliberate hold. */
+        /* Tab on tap; platform-aware Command/Control on a deliberate hold. */
         thumb_cmd_tap: thumbcmd {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
@@ -84,7 +84,7 @@
             bindings = <&cmd_key>, <&kp>;
         };
 
-        /* Tab on tap; Option/Alt on hold, with tap-then-hold Tab repeat. */
+        /* Enter on tap; Option/Alt on hold, with tap-then-hold repeat. */
         thumb_mod_tap: thumbmt {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
