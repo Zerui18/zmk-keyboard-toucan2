@@ -33,6 +33,7 @@ Commands:
   flash-both            Reboot and flash both halves with existing images
   usb-check             Verify both runtime USB ports are available
   test-memory           Test memory case, SEQ names, font, and capture/playback
+  test-platform         Test macOS/Windows shortcuts and paired releases
   update                Update all West-managed dependencies
   clean                 Remove generated build output
   doctor                Check the local development environment
@@ -279,9 +280,9 @@ main() {
         usb-check)
             run_usb_tool check
             ;;
-        test-memory)
+        test-memory|test-platform)
             require_docker
-            run_container test-memory
+            run_container "$command"
             ;;
         clean)
             require_docker

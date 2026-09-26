@@ -17,7 +17,8 @@ INSTALL_SIDE_GOALS := $(filter left right,$(MAKECMDGOALS))
 
 .PHONY: help setup doctor left right all install install-left install-right \
 	install-both flash-left flash-right flash-both usb-check west-update clean \
-	shell sync-upstream format-keymap check-keymap-format install-hooks test-memory
+	shell sync-upstream format-keymap check-keymap-format install-hooks test-memory \
+	test-platform
 
 help:
 	@printf '%s\n' \
@@ -38,6 +39,7 @@ help:
 		'  make format-keymap        Reflow layers to the physical split layout' \
 		'  make check-keymap-format  Check formatting without changing files' \
 		'  make test-memory          Test memory case, SEQ names, font, and capture/playback' \
+		'  make test-platform        Test macOS/Windows shortcuts and paired releases' \
 		'  make install-hooks        Enable the repository pre-commit hooks' \
 		'' \
 		'  make setup                Pull the builder and initialize West' \
@@ -74,6 +76,9 @@ check-keymap-format:
 
 test-memory:
 	@$(ZMK_TOOL) test-memory
+
+test-platform:
+	@$(ZMK_TOOL) test-platform
 
 install-hooks:
 	@git config --local core.hooksPath .githooks

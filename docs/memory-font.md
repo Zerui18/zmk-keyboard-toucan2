@@ -23,7 +23,7 @@ digits for `L<n>` fallbacks, and `?`, rather than unused alphabets.
 | --- | --- | --- | ---: | ---: | ---: |
 | `small_font` | Version, TEXT counter, FULL | `ter-u12n.bdf`, 6×12 normal | 8 | 6 | 6×12 |
 | `status_font` | Dashboard, MEM SET header and content | `ter-u18b.bdf`, 10×18 bold | 12 | 10 | 10×18 |
-| `title_font` | TOUCAN, SLEEP, OFF | `ter-u24b.bdf`, 12×24 bold | 15 | 12 | 12×15 |
+| `title_font` | TOUCAN, OFF | `ter-u24b.bdf`, 12×24 bold | 15 | 12 | 12×15 |
 | `layer_font` | Layer names, UF2 | `ter-u32b.bdf`, 16×32 bold | 20 | 16 | 16×20 |
 
 All measurements are native LCD pixels. Packing removes only top/bottom rows

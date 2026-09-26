@@ -446,53 +446,13 @@ static void render_bands(struct zmk_widget_screen *widget, uint8_t bands) {
     }
 }
 
-static void format_host_label(const struct toucan_display_state *state, char *label,
-                              size_t label_size) {
-    if (state->selected_usb) {
-        snprintf(label, label_size, "USB%s", state->usb_hid_ready ? "" : "!");
-        return;
-    }
-
-    uint8_t profile = MIN(state->active_profile_index, TOUCAN_BT_PROFILE_COUNT - 1);
-    bool bonded = state->profiles_bonded[profile];
-    char suffix = state->active_profile_connected && bonded ? '\0' : (bonded ? '!' : '?');
-
-    if (suffix == '\0') {
-        snprintf(label, label_size, "BT%u", profile + 1U);
-    } else {
-        snprintf(label, label_size, "BT%u%c", profile + 1U, suffix);
-    }
-}
-
-static void draw_sleep_battery_bar(struct zmk_widget_screen *widget, int x, uint8_t percentage,
-                                   bool connected) {
-    outline_rect(widget, x, 146, 60, 10);
-    if (!connected) {
-        dither_rect(widget, x + 2, 148, 56, 6);
-        return;
-    }
-
-    int fill_width = (MIN(percentage, 100U) * 56U + 50U) / 100U;
-    if (fill_width > 0) {
-        fill_rect(widget, x + 2, 148, fill_width, 6, true);
-    }
-}
-
 static void draw_sleep_page(struct zmk_widget_screen *widget) {
-    char host_label[6];
+    /* Split and host state can go stale while this retained image is visible. */
+    const int center_x = SCREEN_WIDTH / 2;
+    const int center_y = SCREEN_HEIGHT / 2;
 
-    draw_disc(widget, 72, 52, 24, true);
-    draw_disc(widget, 81, 45, 21, false);
-
-    int width = TITLE_TEXT_WIDTH("SLEEP");
-    DRAW_TITLE_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 96, "SLEEP");
-
-    format_host_label(&widget->state, host_label, sizeof(host_label));
-    width = STATUS_TEXT_WIDTH(host_label);
-    DRAW_STATUS_TEXT(widget, (SCREEN_WIDTH - width + 1) / 2, 122, host_label);
-    draw_sleep_battery_bar(widget, CANVAS_PADDING, widget->state.battery_left, true);
-    draw_sleep_battery_bar(widget, 76, widget->state.battery_right,
-                           widget->state.right_connected);
+    draw_disc(widget, center_x, center_y, 24, true);
+    draw_disc(widget, center_x + 9, center_y - 7, 21, false);
 }
 
 static bool wake_position_is_set(uint8_t position, const uint8_t *positions, size_t count) {

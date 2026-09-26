@@ -142,6 +142,28 @@ build_side() {
     log "Firmware ready: ${artifact}"
 }
 
+run_native_test() {
+    local name="$1"
+    local config_dir="${REPO_DIR}/tests/$2"
+    local pass_marker="$3"
+    local build_dir="${BUILD_ROOT}/tests/${name}"
+
+    west build -s "${WORKSPACE_DIR}/zmk/app" \
+        -d "$build_dir" -b native_posix_64 -- \
+        -DZephyr_DIR=/workspace/zephyr/share/zephyr-package/cmake \
+        "-DZMK_CONFIG=${config_dir}" \
+        "-DZMK_EXTRA_MODULES=${REPO_DIR};${config_dir}" \
+        -DCONFIG_ASSERT=y
+    if ! timeout 30 "${build_dir}/zephyr/zmk.exe" >"${build_dir}/replay.log" 2>&1; then
+        cat "${build_dir}/replay.log"
+        exit 1
+    fi
+    if ! grep -F "$pass_marker" "${build_dir}/replay.log"; then
+        cat "${build_dir}/replay.log"
+        exit 1
+    fi
+}
+
 clean_outputs() {
     log "Removing generated build output"
     cmake -E remove_directory "$BUILD_ROOT"
@@ -183,22 +205,11 @@ main() {
                 -o "${BUILD_ROOT}/tests/memory-sequence"
             "${BUILD_ROOT}/tests/memory-sequence"
             python3 "${REPO_DIR}/tests/test_memory_font.py"
-            west build -s "${WORKSPACE_DIR}/zmk/app" \
-                -d "${BUILD_ROOT}/tests/memory-capture" -b native_posix_64 -- \
-                -DZephyr_DIR=/workspace/zephyr/share/zephyr-package/cmake \
-                "-DZMK_CONFIG=${REPO_DIR}/tests/memory_capture" \
-                "-DZMK_EXTRA_MODULES=${REPO_DIR};${REPO_DIR}/tests/memory_capture" \
-                -DCONFIG_ASSERT=y
-            if ! timeout 30 "${BUILD_ROOT}/tests/memory-capture/zephyr/zmk.exe" \
-                >"${BUILD_ROOT}/tests/memory-capture/replay.log" 2>&1; then
-                cat "${BUILD_ROOT}/tests/memory-capture/replay.log"
-                exit 1
-            fi
-            if ! grep 'PASS: private TEXT/SEQ capture' \
-                "${BUILD_ROOT}/tests/memory-capture/replay.log"; then
-                cat "${BUILD_ROOT}/tests/memory-capture/replay.log"
-                exit 1
-            fi
+            run_native_test memory-capture memory_capture 'PASS: private TEXT/SEQ capture'
+            ;;
+        test-platform)
+            ensure_workspace false
+            run_native_test platform-mode platform_mode 'PASS: platform shortcuts'
             ;;
         clean)
             clean_outputs

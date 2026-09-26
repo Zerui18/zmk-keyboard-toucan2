@@ -22,7 +22,7 @@ ARCHIVE_URL = (
 ARCHIVE_SHA256 = "d961c1b781627bf417f9b340693d64fc219e0113ad3a3af1a3424c7aa373ef79"
 ASCII = "".join(chr(code) for code in range(33, 127))
 # Only these labels use the two large sizes. Keep all digits for L<n> fallbacks.
-TITLE_LABELS = ("TOUCAN", "SLEEP", "OFF")
+TITLE_LABELS = ("TOUCAN", "OFF")
 LAYER_LABELS = ("BASE", "SYM", "NAV", "CLP", "EDT", "APP", "MOU", "SYS", "FN", "DNG", "UF2")
 LABEL_CHARS = "".join(sorted(set("0123456789?L" + "".join(TITLE_LABELS + LAYER_LABELS))))
 # Use upstream's actual bitmap sizes. Do not synthesize intermediate sizes.

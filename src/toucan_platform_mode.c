@@ -55,7 +55,8 @@ static uint32_t resolve_command_keycode(uint32_t requested_keycode) {
     }
 
     uint32_t command_modifier = toucan_platform_is_windows() ? MOD_LCTL : MOD_LGUI;
-    return APPLY_MODS(SELECT_MODS(requested_keycode) | command_modifier,
+    /* APPLY_MODS does not parenthesize its modifier argument before shifting it. */
+    return APPLY_MODS((SELECT_MODS(requested_keycode) | command_modifier),
                       STRIP_MODS(requested_keycode));
 }
 

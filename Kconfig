@@ -88,6 +88,7 @@ config TOUCAN_PLATFORM_MODE
     bool "Toucan persistent macOS/Windows shortcut mode"
     default $(dt_compat_enabled,$(DT_COMPAT_TOUCAN_PLATFORM_TOGGLE))
     depends on SETTINGS
+    select ZMK_LOW_PRIORITY_WORK_QUEUE
     help
       Provide the &cmd_key, &app_switch_layer, and &platform_mode behaviors.
       Command bindings send GUI in macOS mode and Control in Windows mode. The

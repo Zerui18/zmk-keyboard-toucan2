@@ -442,16 +442,17 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
 - `MOU` is opaque: every unassigned position is `&none`. D/F scroll up/down
   using HID Resolution Multipliers at 10 units/second and a 16 ms tick; the
   thumb row is `Middle Left Right | Left Right Middle`.
-- `SYS`: the left bottom row is `BT_CLR, BT1, BT2, BT3, BT4, BT5`; the left home
+- `SYS`: the left bottom row is `BT_CLR, BT1, BT2, BT3, BT4, BT5`; the left top
   row is `MEM_CLR, MEM1, MEM2, MEM3, MEM4, MEM5`. `BT_CLR` is inert on release
   before two seconds; a two-second hold clears only the selected profile.
   Tapping a memory slot replays it, holding it for 400 ms starts capture, and
   holding MEM_CLR while tapping a slot clears it.
-  Q/W on the top row send Hyper+A/Hyper+V, respectively: Ctrl+Shift+Alt+GUI
+  A/S on the home row send Hyper+A/Hyper+V, respectively: Ctrl+Shift+Alt+GUI
   plus the target key, independent of the macOS/Windows mode.
 - `FN`: `Z` requests raw voltage from both halves, `M` toggles macOS/Windows
   mode, `Esc` unlocks Studio, the left side carries F1–F12, and the top-right
-  positions carry volume down/mute/up.
+  positions carry volume down/mute/up. The Backspace thumb sends forward Delete;
+  plain Backspace on BASE is unchanged.
 - `DNG`: physical `Q`/`P` enter the bootloader on their own halves and physical
   `A`/`;` reset their own halves.
 
@@ -614,8 +615,9 @@ dashboard transfers zero bytes.
 
 - BOOT shows `TOUCAN` and `ZMK 0.3 · <7-char Git SHA>`, holds for 450 ms, then
   reveals the dashboard.
-- SLEEP shows the crescent, frozen host label, and both battery bars before
-  normal ZMK deep sleep.
+- SLEEP shows only a centered crescent before normal ZMK deep sleep: no text,
+  battery bars, or host/split connection status. The retained image must not
+  imply live status, especially when the left half sleeps before the right.
 - OFF shows the power glyph and a miniature matrix generated from the real
   left soft-power wake positions before System OFF. The memory LCD retains it
   while the MCU is off.
@@ -636,7 +638,7 @@ frames.
 
 ### Persistent memory interaction
 
-The SYS layer's left home row is `MEM_CLR, MEM1..MEM5`. A slot tap replays it;
+The SYS layer's left top row is `MEM_CLR, MEM1..MEM5`. A slot tap replays it;
 a 400 ms hold starts replacement capture in SEQ mode. The initiating SYS thumb
 may then be released and normal keymap resolution continues, including layers,
 hold-taps, macros, combos, Enter, and Escape. The memory listener consumes the

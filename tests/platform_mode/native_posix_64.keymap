@@ -1,0 +1,50 @@
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/kscan_mock.h>
+
+/ {
+    behaviors {
+        cmd_key: cmdkey {
+            compatible = "zmk,behavior-toucan-command-key";
+            #binding-cells = <1>;
+        };
+        platform_mode: osmode {
+            compatible = "zmk,behavior-toucan-platform-toggle";
+            #binding-cells = <0>;
+        };
+    };
+
+    keymap {
+        compatible = "zmk,keymap";
+        base {
+            bindings = <
+                &cmd_key Z &cmd_key LS(Z) &cmd_key LA(RS(N4)) &cmd_key LG(Z)
+                &cmd_key C_VOL_UP &cmd_key 0 &cmd_key LGUI &cmd_key RGUI
+                &platform_mode &kp F12
+            >;
+        };
+    };
+};
+
+#define TAP(position) ZMK_MOCK_PRESS(0,position,20) ZMK_MOCK_RELEASE(0,position,20)
+#define SHORTCUTS TAP(0) TAP(1) TAP(2) TAP(3) TAP(4) TAP(5) TAP(6) TAP(7)
+
+&kscan {
+    rows = <1>;
+    columns = <10>;
+    events = <
+        /* macOS, then the identical bindings in Windows mode. */
+        SHORTCUTS
+        TAP(8)
+        SHORTCUTS
+        TAP(8)
+
+        /* Release must match the macOS press even after switching to Windows. */
+        ZMK_MOCK_PRESS(0,1,20)
+        TAP(8)
+        ZMK_MOCK_RELEASE(0,1,20)
+        TAP(1) /* A fresh press at the same position now uses Windows mode. */
+
+        TAP(9) /* Sentinel: all expected presses and releases must have arrived. */
+    >;
+};

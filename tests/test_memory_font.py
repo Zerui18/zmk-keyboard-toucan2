@@ -111,7 +111,7 @@ class MemoryFontTest(unittest.TestCase):
 
     def test_titles_and_layer_names_fit(self):
         for name, labels in (
-            ("title_font", ("TOUCAN", "SLEEP", "OFF")),
+            ("title_font", ("TOUCAN", "OFF")),
             ("layer_font", ("BASE", "SYM", "NAV", "CLP", "EDT", "APP",
                             "MOU", "SYS", "FN", "DNG", "UF2", "L255")),
         ):

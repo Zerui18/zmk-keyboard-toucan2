@@ -171,18 +171,18 @@ is deliberately not stored in this repository.
 
 ## System layer (`SYS`)
 
-Hold the outer-left thumb. Hyper shortcuts occupy Q/W on the left top row;
-persistent memory occupies the left home row; Bluetooth occupies the bottom row:
+Hold the outer-left thumb. Persistent memory occupies the left top row;
+Hyper shortcuts occupy A/S on the left home row; Bluetooth occupies the bottom row:
 
 ```text
-___      Hyper+A  Hyper+V  ___   ___   ___ | ___  ___  ___  ___  ___  ___
 MEM_CLR  MEM1     MEM2     MEM3  MEM4  MEM5 | ___  ___  ___  ___  ___  ___
+___      Hyper+A  Hyper+V  ___   ___   ___ | ___  ___  ___  ___  ___  ___
 BT_CLR   BT1      BT2      BT3   BT4   BT5 | ___  ___  ___  ___  ___  ___
 
                                   ___  ___  ___ | ___  ___  ___
 ```
 
-SYS+Q sends Hyper+A and SYS+W sends Hyper+V. Hyper means
+SYS+A sends Hyper+A and SYS+S sends Hyper+V. Hyper means
 Ctrl+Shift+Alt+GUI (Control+Shift+Option+Command on macOS). These are ordinary
 key bindings with all four modifiers, not hold-taps or tap dances, and do not
 change with the macOS/Windows platform mode.
@@ -276,10 +276,12 @@ Studio  ___      F7  F8  F9  F12 | VolumeDown  Mute  VolumeUp  ___   ___  ___
 ___     ___      F4  F5  F6  F11 | ___         ___   ___       ___   ___  ___
 ___     Battery  F1  F2  F3  F10 | ___         Mode  ___       ___   ___  ___
 
-                              ___  ___  ___ | ___  ___  ___
+                              ___  DEL  ___ | ___  ___  ___
 ```
 
 - Studio unlocks ZMK Studio.
+- FN + Backspace sends forward Delete: hold the outer-right thumb and tap the
+  left Backspace thumb. Plain Backspace is unchanged.
 - Battery requests the latest raw median ADC voltage from both halves. Each
   available result is typed through the selected USB/BLE endpoint as
   `left=NNNNmv` or `right=NNNNmv`, followed by Enter.
@@ -294,6 +296,14 @@ Dedicated Control bindings are unchanged. `&app_switch_layer` instead holds
 Command on macOS or Alt on Windows for the lifetime of the layer. The same
 persisted mode therefore controls navigation/editing shortcuts, APP switching,
 and trackpad pinch zoom.
+
+EDT+F sends Cmd+Shift+Z in macOS mode and Ctrl+Shift+Z in Windows mode.
+The Command wrapper preserves any modifiers already encoded in the binding,
+including Redo's Shift, and releases the same chord even if the mode changes
+while the key is held.
+
+`make test-platform` runs native ZMK regression tests for these shortcuts,
+modifier-only Command keys, and press/release pairing in both platform modes.
 
 ## Danger layer (`DNG`)
 
