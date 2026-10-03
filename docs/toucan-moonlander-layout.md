@@ -47,8 +47,8 @@ The display uses the short names shown below.
 | 4 | `EDIT` | `EDT` | Hold D, then use S/F | Undo and redo |
 | 5 | `APP` | `APP` | Hold C, then use X/V | Cycle backward/forward through applications |
 | 6 | `MOUSE` | `MOU` | Touch the trackpad | Opaque pointer controls, D/F scroll, and thumb buttons |
-| 7 | `SYS` | `SYS` | Hold outer-left thumb | Bluetooth profiles, five persistent memory slots, and Hyper shortcuts |
-| 8 | `FN` | `FN` | Hold outer-right thumb | Diagnostics, F-keys, media, and platform mode |
+| 7 | `SYS` | `SYS` | Hold outer-left thumb | Bluetooth profiles, five persistent memory slots, Hyper shortcuts, and platform mode |
+| 8 | `FN` | `FN` | Hold outer-right thumb | Diagnostics, F-keys, brightness, and volume |
 | 9 | `DANGER` | `DNG` | Hold both outer thumbs | Side-local bootloader and reset |
 
 `DANGER` is a conditional layer: it exists only while `SYS` and `FN` are both
@@ -172,25 +172,42 @@ is deliberately not stored in this repository.
 ## System layer (`SYS`)
 
 Hold the outer-left thumb. Persistent memory occupies the left top row;
-Hyper shortcuts occupy A/S on the left home row; Bluetooth occupies the bottom row:
+Mode and Hyper shortcuts occupy the left home row; Bluetooth occupies the bottom row:
 
 ```text
 MEM_CLR  MEM1     MEM2     MEM3  MEM4  MEM5 | ___  ___  ___  ___  ___  ___
-___      Hyper+A  Hyper+V  ___   ___   ___ | ___  ___  ___  ___  ___  ___
-BT_CLR   BT1      BT2      BT3   BT4   BT5 | ___  ___  ___  ___  ___  ___
+Mode     Hyper+A  Hyper+V  ___   ___   ___ | ___  ___  ___  ___  ___  ___
+USB/CLR  BT1      BT2      BT3   BT4   BT5 | ___  ___  ___  ___  ___  ___
 
                                   ___  ___  ___ | ___  ___  ___
 ```
+
+SYS+Equal toggles the active host's saved [Mac/Windows mode](#platform-mode).
+It is the leftmost key on the left home row.
 
 SYS+A sends Hyper+A and SYS+S sends Hyper+V. Hyper means
 Ctrl+Shift+Alt+GUI (Control+Shift+Option+Command on macOS). These are ordinary
 key bindings with all four modifiers, not hold-taps or tap dances, and do not
 change with the macOS/Windows platform mode.
 
-BT1-BT5 on Z/X/C/V/B select ZMK profiles 0-4. BT_CLR is on Minus; tapping it is
-inert. Hold it for two seconds to clear only the currently selected profile;
-it does not clear every bond. The display's five profile slots use the
-user-facing labels 1-5.
+BT1-BT5 on Z/X/C/V/B select ZMK profiles 0-4 and request Bluetooth output,
+even while USB is plugged in. USB/CLR (the former BT_CLR key) is on Minus:
+tap it to request USB, or hold it for two seconds to clear only the currently
+selected BLE profile. It does not clear every bond.
+
+Output selection uses ZMK's availability fallback: a USB tap leaves BLE active
+if USB isn't ready; a requested BLE profile takes over when connected. The
+display shows the actual output, not just the requested preference. Its memory
+row is above the Bluetooth row. BT1-BT5 retain their bonded/open markers while
+USB is active, but no BT slot is underlined or shown selected.
+
+**Windows BLE compatibility:** the left/central firmware disables 2M PHY
+with `CONFIG_BT_CTLR_PHY_2M=n`, following ZMK's documented Intel/Realtek
+compatibility workaround. Its host and inter-half links therefore use 1M.
+This resolved the reported Windows disconnects without changing battery
+reporting, connection timing, queue sizes, or USB fallback.
+No bond reset is needed. To revert the workaround, remove that override from
+`boards/shields/toucan/toucan_left.conf` and rebuild/flash the left half.
 
 For a memory slot:
 
@@ -220,6 +237,12 @@ literal stored characters; SEQ tracks held Shift, action modifiers, and Caps
 Lock while formatting key labels. SEQ replays the resulting key events,
 whereas TEXT compensates for host Caps Lock to preserve literal case. See the
 [memory font design](memory-font.md) for glyph metrics and validation.
+
+Symbols entered from SYM appear as single characters: `+` shows `+`, not a
+Shift icon followed by `+`. The same applies to the other shifted symbols.
+Their required Shift remains in the recorded key events for correct playback.
+Typing `cmd` then entering SYM `+` shows Cmd + `+`; deliberately typed or held
+Shift stays visible, so `shiftcmd4` still shows Shift + Cmd + `4`.
 
 ### SEQ modifier-name shorthand
 
@@ -272,9 +295,9 @@ double-tap SYS to cancel and record a shorter sequence.
 Hold the outer-right thumb:
 
 ```text
-Studio  ___      F7  F8  F9  F12 | VolumeDown  Mute  VolumeUp  ___   ___  ___
-___     ___      F4  F5  F6  F11 | ___         ___   ___       ___   ___  ___
-___     Battery  F1  F2  F3  F10 | ___         Mode  ___       ___   ___  ___
+Studio  ___      F3  F2  F1  F10 | ___   BriDown  BriUp  ___  ___  ___
+___     ___      F6  F5  F4  F11 | Mute  VolDown  VolUp  ___  ___  ___
+___     Battery  F9  F8  F7  F12 | ___   ___      ___    ___  ___  ___
 
                               ___  DEL  ___ | ___  ___  ___
 ```
@@ -285,17 +308,34 @@ ___     Battery  F1  F2  F3  F10 | ___         Mode  ___       ___   ___  ___
 - Battery requests the latest raw median ADC voltage from both halves. Each
   available result is typed through the selected USB/BLE endpoint as
   `left=NNNNmv` or `right=NNNNmv`, followed by Enter.
-- Mode toggles and persists the macOS/Windows shortcut mode.
-  The dashboard footer shows an Apple logo for macOS or a Windows logo for Windows.
-- F1-F12 use the left-side 3-by-4 arrangement shown above.
-- Volume down, mute, and volume up occupy the top-left three keys of the right
-  half.
+- F1-F9 mirror SYM's 1-9 grid horizontally onto the left split:
+  W/E/R are F3/F2/F1, S/D/F are F6/F5/F4, and X/C/V are F9/F8/F7.
+  F10/F11/F12 occupy the inner column on T/G/B, top to bottom.
+- Volume down/up are on J/K, directly below NAV's Down/Up keys on U/I.
+  Mute is immediately to their left on H.
+- Brightness down/up are on U/I, directly above volume down/up. These send
+  standard display-brightness consumer keys; host/display support determines
+  whether they adjust a particular monitor.
+
+## Platform mode
+
+SYS+Equal toggles and persists the macOS/Windows shortcut mode for the active
+output: the current BLE profile, or USB's separate setting. The dashboard
+footer shows an Apple logo for macOS or a Windows logo for Windows.
 
 In macOS mode, `&cmd_key` adds GUI/Command; in Windows mode it adds Control.
 Dedicated Control bindings are unchanged. `&app_switch_layer` instead holds
 Command on macOS or Alt on Windows for the lifetime of the layer. The same
-persisted mode therefore controls navigation/editing shortcuts, APP switching,
+per-host mode therefore controls navigation/editing shortcuts, APP switching,
 and trackpad pinch zoom.
+
+For each Bluetooth device, select its profile and wait until Bluetooth is the
+active output, then set Mode once with SYS+Equal. Switching devices automatically
+restores that profile's choice, including after a restart. USB has its own
+choice; changing the background BLE profile while output remains USB does not
+change USB's mode. Choices belong to profile slots and survive clearing/re-pairing
+a slot. On upgrade, the old global mode seeds any slots without a saved choice;
+without an old setting they default to macOS.
 
 EDT+F sends Cmd+Shift+Z in macOS mode and Ctrl+Shift+Z in Windows mode.
 The Command wrapper preserves any modifiers already encoded in the binding,
@@ -303,7 +343,10 @@ including Redo's Shift, and releases the same chord even if the mode changes
 while the key is held.
 
 `make test-platform` runs native ZMK regression tests for these shortcuts,
-modifier-only Command keys, and press/release pairing in both platform modes.
+modifier-only Command keys, per-host selection, legacy migration, settings
+save/load, and press/release pairing across host changes. The profile tests use
+synthetic endpoint events and a test storage backend, including overlapping
+deferred saves; they don't require or emulate a Bluetooth radio.
 
 ## Danger layer (`DNG`)
 

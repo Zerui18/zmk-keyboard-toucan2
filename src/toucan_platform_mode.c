@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
@@ -19,19 +20,45 @@
 #include <dt-bindings/zmk/keys.h>
 #include <dt-bindings/zmk/modifiers.h>
 #include <zmk/behavior.h>
+#include <zmk/endpoints.h>
+#include <zmk/events/endpoint_changed.h>
 #include <zmk/events/keycode_state_changed.h>
 #include <zmk/keymap.h>
 #include <zmk/workqueue.h>
+
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+#include <zmk/ble.h>
+#endif
 
 #include "toucan_platform_mode.h"
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-#define SETTINGS_KEY "toucan_platform/windows"
+#define SETTINGS_KEY "toucan_platform/modes"
+#define SETTINGS_VERSION 1U
 #define ACTIVE_PLATFORM_POSITIONS 64U
 
 static atomic_t windows_mode;
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+#define PLATFORM_BLE_PROFILE_COUNT ZMK_BLE_PROFILE_COUNT
+#else
+#define PLATFORM_BLE_PROFILE_COUNT 0
+#endif
+#define PLATFORM_MODE_COUNT (1 + PLATFORM_BLE_PROFILE_COUNT)
+
+/* Stable on-disk order: version, USB, then BLE slots 0..N. All fields are bytes. */
+struct persisted_platform_modes {
+    uint8_t version;
+    uint8_t windows[PLATFORM_MODE_COUNT];
+};
+
+static struct persisted_platform_modes platform_modes = {.version = SETTINGS_VERSION};
+static size_t loaded_mode_count;
+static uint8_t legacy_windows_mode;
+static int selected_mode_slot;
+K_MUTEX_DEFINE(platform_mode_mutex);
+
 static uint32_t active_command_keycodes[ACTIVE_PLATFORM_POSITIONS];
 static bool active_command_valid[ACTIVE_PLATFORM_POSITIONS];
 static uint32_t active_app_switch_modifiers[ACTIVE_PLATFORM_POSITIONS];
@@ -45,6 +72,34 @@ bool toucan_platform_is_windows(void) {
 }
 
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+static int endpoint_mode_slot(struct zmk_endpoint_instance endpoint) {
+    switch (endpoint.transport) {
+    case ZMK_TRANSPORT_USB:
+        return 0;
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+    case ZMK_TRANSPORT_BLE:
+        if (endpoint.ble.profile_index >= 0 &&
+            endpoint.ble.profile_index < PLATFORM_BLE_PROFILE_COUNT) {
+            return 1 + endpoint.ble.profile_index;
+        }
+        break;
+#endif
+    default:
+        break;
+    }
+    return -EINVAL;
+}
+
+static void publish_platform_mode_locked(void) {
+    bool next_mode = platform_modes.windows[selected_mode_slot] != 0U;
+    if (atomic_set(&windows_mode, next_mode) != next_mode) {
+        /* The getter is atomic, so synchronous listeners can query it without the mutex.
+         * Keep publication serialized with endpoint changes and preference toggles. */
+        raise_toucan_platform_mode_changed(
+            (struct toucan_platform_mode_changed){.windows = next_mode});
+    }
+}
+
 static uint32_t resolve_command_keycode(uint32_t requested_keycode) {
     if (requested_keycode == 0U || requested_keycode == LGUI) {
         return toucan_platform_is_windows() ? LCTRL : LGUI;
@@ -63,15 +118,20 @@ static uint32_t resolve_command_keycode(uint32_t requested_keycode) {
 static uint32_t resolve_app_switch_modifier(void) {
     return toucan_platform_is_windows() ? LALT : LGUI;
 }
-#endif
 
 static void save_platform_mode_work_handler(struct k_work *work) {
     ARG_UNUSED(work);
 
-    uint8_t saved_mode = toucan_platform_is_windows() ? 1U : 0U;
-    int err = settings_save_one(SETTINGS_KEY, &saved_mode, sizeof(saved_mode));
+    struct persisted_platform_modes saved;
+    k_mutex_lock(&platform_mode_mutex, K_FOREVER);
+    saved = platform_modes;
+    k_mutex_unlock(&platform_mode_mutex);
+
+    /* Save the whole table, never the endpoint that happens to be active when work runs.
+     * Coalesced toggles on different profiles must all survive a restart. */
+    int err = settings_save_one(SETTINGS_KEY, &saved, sizeof(saved));
     if (err < 0) {
-        LOG_WRN("Unable to persist Toucan platform mode (%d)", err);
+        LOG_WRN("Unable to persist Toucan platform modes (%d)", err);
     }
 }
 
@@ -81,27 +141,101 @@ static int platform_mode_settings_set(const char *name, size_t length,
                                       settings_read_cb read_cb, void *cb_arg) {
     const char *next;
 
-    if (!settings_name_steq(name, "windows", &next) || next != NULL ||
-        length != sizeof(uint8_t)) {
+    if (settings_name_steq(name, "windows", &next) && next == NULL) {
+        /* Legacy global mode is a fallback only; load order must not override new choices. */
+        if (length != sizeof(uint8_t)) {
+            return -EINVAL;
+        }
+        uint8_t saved_mode;
+        int err = read_cb(cb_arg, &saved_mode, sizeof(saved_mode));
+        if (err < 0) {
+            return err;
+        }
+        if (err != (int)sizeof(saved_mode) || saved_mode > 1U) {
+            return -EINVAL;
+        }
+        k_mutex_lock(&platform_mode_mutex, K_FOREVER);
+        legacy_windows_mode = saved_mode;
+        k_mutex_unlock(&platform_mode_mutex);
+        return 0;
+    }
+
+    if (!settings_name_steq(name, "modes", &next) || next != NULL) {
         return -ENOENT;
     }
-
-    uint8_t saved_mode;
-    int err = read_cb(cb_arg, &saved_mode, sizeof(saved_mode));
-    if (err < 0) {
-        return err;
-    }
-
-    if (err != (int)sizeof(saved_mode) || saved_mode > 1U) {
+    /* BLE profile IDs are uint8_t. Accept a valid prefix when firmware adds/removes slots. */
+    if (length < 2U || length > 2U + UINT8_MAX + 1U) {
         return -EINVAL;
     }
 
-    atomic_set(&windows_mode, saved_mode);
+    struct persisted_platform_modes saved;
+    size_t read_size = MIN(length, sizeof(saved));
+    int err = read_cb(cb_arg, &saved, read_size);
+    if (err < 0) {
+        return err;
+    }
+    if (err != (int)read_size || saved.version != SETTINGS_VERSION) {
+        return -EINVAL;
+    }
+    size_t count = read_size - sizeof(saved.version);
+    for (size_t i = 0; i < count; i++) {
+        if (saved.windows[i] > 1U) {
+            return -EINVAL;
+        }
+    }
+
+    k_mutex_lock(&platform_mode_mutex, K_FOREVER);
+    memcpy(platform_modes.windows, saved.windows, count);
+    loaded_mode_count = count;
+    k_mutex_unlock(&platform_mode_mutex);
+    return 0;
+}
+
+static int platform_mode_settings_commit(void) {
+    /* Serialize the endpoint query too: a newer endpoint event must not be
+     * overwritten by a snapshot taken before acquiring this mutex. */
+    k_mutex_lock(&platform_mode_mutex, K_FOREVER);
+    struct zmk_endpoint_instance endpoint = zmk_endpoints_selected();
+#if IS_ENABLED(CONFIG_ZMK_BLE)
+    if (endpoint.transport == ZMK_TRANSPORT_BLE) {
+        /* Endpoint initialization precedes settings loading. BLE restores its selected
+         * profile without emitting a change event, so its loaded index is authoritative. */
+        endpoint.ble.profile_index = zmk_ble_active_profile_index();
+    }
+#endif
+    int slot = endpoint_mode_slot(endpoint);
+
+    for (size_t i = loaded_mode_count; i < PLATFORM_MODE_COUNT; i++) {
+        platform_modes.windows[i] = legacy_windows_mode;
+    }
+    loaded_mode_count = PLATFORM_MODE_COUNT;
+    if (slot >= 0) {
+        selected_mode_slot = slot;
+    }
+    publish_platform_mode_locked();
+    k_mutex_unlock(&platform_mode_mutex);
     return 0;
 }
 
 SETTINGS_STATIC_HANDLER_DEFINE(toucan_platform, "toucan_platform", NULL,
-                               platform_mode_settings_set, NULL, NULL);
+                               platform_mode_settings_set, platform_mode_settings_commit, NULL);
+
+static int platform_endpoint_listener(const zmk_event_t *eh) {
+    ARG_UNUSED(eh);
+    k_mutex_lock(&platform_mode_mutex, K_FOREVER);
+    /* A concurrently dispatched event may carry an older endpoint than the live one. */
+    int slot = endpoint_mode_slot(zmk_endpoints_selected());
+    if (slot >= 0) {
+        selected_mode_slot = slot;
+        publish_platform_mode_locked();
+    }
+    k_mutex_unlock(&platform_mode_mutex);
+    return ZMK_EV_EVENT_BUBBLE;
+}
+
+ZMK_LISTENER(toucan_platform_endpoint, platform_endpoint_listener);
+ZMK_SUBSCRIPTION(toucan_platform_endpoint, zmk_endpoint_changed);
+#endif
 
 #define DT_DRV_COMPAT zmk_behavior_toucan_command_key
 
@@ -290,11 +424,12 @@ static int on_platform_toggle_pressed(struct zmk_behavior_binding *binding,
     ARG_UNUSED(binding);
     ARG_UNUSED(event);
 
-    bool next_mode = !toucan_platform_is_windows();
-    atomic_set(&windows_mode, next_mode ? 1 : 0);
-
-    raise_toucan_platform_mode_changed(
-        (struct toucan_platform_mode_changed){.windows = next_mode});
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    k_mutex_lock(&platform_mode_mutex, K_FOREVER);
+    platform_modes.windows[selected_mode_slot] ^= 1U;
+    bool next_mode = platform_modes.windows[selected_mode_slot] != 0U;
+    publish_platform_mode_locked();
+    k_mutex_unlock(&platform_mode_mutex);
 
     int err = k_work_submit_to_queue(zmk_workqueue_lowprio_work_q(),
                                      &save_platform_mode_work);
@@ -303,6 +438,7 @@ static int on_platform_toggle_pressed(struct zmk_behavior_binding *binding,
     }
 
     LOG_INF("Toucan shortcut mode: %s", next_mode ? "Windows" : "macOS");
+#endif
     return ZMK_BEHAVIOR_OPAQUE;
 }
 

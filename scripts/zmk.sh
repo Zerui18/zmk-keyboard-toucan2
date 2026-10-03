@@ -33,7 +33,7 @@ Commands:
   flash-both            Reboot and flash both halves with existing images
   usb-check             Verify both runtime USB ports are available
   test-memory           Test memory case, SEQ names, font, and capture/playback
-  test-platform         Test macOS/Windows shortcuts and paired releases
+  test-platform         Test per-host modes, persistence, and shortcuts
   update                Update all West-managed dependencies
   clean                 Remove generated build output
   doctor                Check the local development environment

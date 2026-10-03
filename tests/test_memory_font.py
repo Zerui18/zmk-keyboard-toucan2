@@ -127,8 +127,8 @@ class MemoryFontTest(unittest.TestCase):
         # Check actual ink, not blank cell padding above the capitals.
         for label, y, band_top, band_bottom in (
             ("USB! BT5? OFF", 8, 7, 23),
-            ("BT12345", 84, 82, 98),
-            ("ME123", 116, 114, 130),
+            ("ME123", 84, 82, 98),
+            ("BT12345", 116, 114, 130),
             ("CAPS", 148, 146, 162),
         ):
             for code in label.replace(" ", ""):

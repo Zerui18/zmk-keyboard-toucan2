@@ -1,0 +1,36 @@
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/kscan_mock.h>
+
+/ {
+    behaviors {
+        cmd_key: cmdkey {
+            compatible = "zmk,behavior-toucan-command-key";
+            #binding-cells = <1>;
+        };
+        platform_mode: osmode {
+            compatible = "zmk,behavior-toucan-platform-toggle";
+            #binding-cells = <0>;
+        };
+        app_switch: appswitch {
+            compatible = "zmk,behavior-toucan-app-switch-layer";
+            #binding-cells = <1>;
+        };
+    };
+    keymap {
+        compatible = "zmk,keymap";
+        base {
+            bindings = <&kp F12 &cmd_key LS(Z) &platform_mode &app_switch 1>;
+        };
+        app {
+            bindings = <&trans &trans &trans &trans>;
+        };
+    };
+};
+
+&kscan {
+    rows = <1>;
+    columns = <4>;
+    /* Run assertions after main has loaded and committed all settings. */
+    events = <ZMK_MOCK_PRESS(0,0,100) ZMK_MOCK_RELEASE(0,0,100)>;
+};

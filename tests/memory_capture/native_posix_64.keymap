@@ -18,10 +18,18 @@
         compatible = "zmk,keymap";
         base {
             bindings = <
-                &mem_set 0 &kp A &kp B &kp C &kp LSHFT &kp RSHFT &kp CAPS &mem_use 0 &mem_use 1 &mem_set 1 &kp F12 &none
+                &mem_set 0 &kp A &kp B &kp C &kp LSHFT &kp RSHFT &kp CAPS &mem_use 0 &mem_use 1 &mem_set 1 &kp F12 &mo 1
                 &kp T &kp R &kp L &kp S &kp H &kp I &kp F &kp P &mem_set 2 &mem_use 2 &mem_set 3 &mem_use 3
                 &kp Z &kp M &kp D &kp N4 &mem_set 4 &mem_use 4 &kp E &none &none &none &none &none
                 &none &none &none &none &none &none
+            >;
+        };
+        symbols {
+            bindings = <
+                &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans
+                &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans &trans
+                &trans &trans &trans &trans &trans &kp PLUS &trans &trans &trans &trans &trans &trans
+                &trans &trans &trans &trans &trans &trans
             >;
         };
     };
@@ -48,6 +56,7 @@
 #define CMD_NAME TAP(3) TAP(25) TAP(26)
 #define DEL_NAME TAP(26) TAP(30) TAP(14)
 #define Z8 TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24) TAP(24)
+#define SYM_PLUS ZMK_MOCK_PRESS(0,11,20) TAP(29) ZMK_MOCK_RELEASE(0,11,20)
 
 &kscan {
     rows = <1>;
@@ -89,10 +98,13 @@
         ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
         ZMK_MOCK_PRESS(0,23,20) ZMK_MOCK_RELEASE(0,23,600)
 
-        /* Slot 4: keep both entered orders and bare 4 labels; replay identical chords. */
+        /* Slot 4: named Shift stays explicit; the symbol layer's Shift stays implicit. */
         ZMK_MOCK_PRESS(0,28,20) ZMK_MOCK_RELEASE(0,28,100)
         SHIFT_NAME CMD_NAME TAP(27)
         CMD_NAME SHIFT_NAME TAP(27)
+        SYM_PLUS
+        CMD_NAME SYM_PLUS
+        SHIFT_NAME CMD_NAME SYM_PLUS
         ZMK_MOCK_PRESS(0,36,650) ZMK_MOCK_RELEASE(0,36,100)
         ZMK_MOCK_PRESS(0,29,20) ZMK_MOCK_RELEASE(0,29,600)
 

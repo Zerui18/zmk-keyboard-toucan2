@@ -39,7 +39,7 @@ help:
 		'  make format-keymap        Reflow layers to the physical split layout' \
 		'  make check-keymap-format  Check formatting without changing files' \
 		'  make test-memory          Test memory case, SEQ names, font, and capture/playback' \
-		'  make test-platform        Test macOS/Windows shortcuts and paired releases' \
+		'  make test-platform        Test per-host modes, persistence, and shortcuts' \
 		'  make install-hooks        Enable the repository pre-commit hooks' \
 		'' \
 		'  make setup                Pull the builder and initialize West' \

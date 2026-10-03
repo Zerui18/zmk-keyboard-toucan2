@@ -336,7 +336,7 @@ off-screen compositing or page transitions.
 | Activity state | `zmk_activity_state_changed` | Active, idle, or sleep |
 | Right split link and USB power | `toucan_split_status_changed` | Explicitly relayed; no 0%-battery disconnect heuristic |
 | Host Caps Lock | `zmk_hid_indicators_changed` | Drives the CAPS footer label |
-| macOS/Windows mode | `toucan_platform_mode_changed` | Persistent mode selects the Apple/Windows footer symbol |
+| macOS/Windows mode | `toucan_platform_mode_changed` | The active USB/BLE host's saved mode selects the Apple/Windows footer symbol |
 | Memory slot/capture state | `toucan_memory_state_changed` | Exposes slot types and live capture only; persisted content stays private |
 
 ### Available in pinned ZMK with another listener or query
@@ -389,8 +389,8 @@ The display should assume the following named layer set and access scheme.
 | 4 | `EDT` | Hold `D`, then use `S`/`F` | Undo, redo |
 | 5 | `APP` | Hold `C`, then use `X`/`V` | Cycle backward/forward through applications |
 | 6 | `MOU` | Trackpad touch | Opaque pointer layer; D/F scroll and mouse buttons on thumbs |
-| 7 | `SYS` | Hold outer-left thumb | Bluetooth profiles, persistent macro memory, and Hyper shortcuts |
-| 8 | `FN` | Hold outer-right thumb | Diagnostics, F-keys, volume, platform mode |
+| 7 | `SYS` | Hold outer-left thumb | Bluetooth profiles, persistent macro memory, Hyper shortcuts, and platform mode |
+| 8 | `FN` | Hold outer-right thumb | Diagnostics, F-keys, brightness, and volume |
 | 9 | `DNG` | Hold both outer thumbs | Bootloader and reset |
 
 ### Base
@@ -442,17 +442,22 @@ ___ ___ ___           ___              ___               ___   ___  ___  ___ ___
 - `MOU` is opaque: every unassigned position is `&none`. D/F scroll up/down
   using HID Resolution Multipliers at 10 units/second and a 16 ms tick; the
   thumb row is `Middle Left Right | Left Right Middle`.
-- `SYS`: the left bottom row is `BT_CLR, BT1, BT2, BT3, BT4, BT5`; the left top
-  row is `MEM_CLR, MEM1, MEM2, MEM3, MEM4, MEM5`. `BT_CLR` is inert on release
-  before two seconds; a two-second hold clears only the selected profile.
+- `SYS`: the left bottom row is `USB/CLR, BT1, BT2, BT3, BT4, BT5`; the left top
+  row is `MEM_CLR, MEM1, MEM2, MEM3, MEM4, MEM5`. USB/CLR taps to prefer USB;
+  a two-second hold clears only the selected BLE profile. BT1-BT5 select their
+  profile and prefer Bluetooth even with USB plugged in. ZMK still falls back
+  to the available output when the preferred one is not ready.
   Tapping a memory slot replays it, holding it for 400 ms starts capture, and
   holding MEM_CLR while tapping a slot clears it.
   A/S on the home row send Hyper+A/Hyper+V, respectively: Ctrl+Shift+Alt+GUI
   plus the target key, independent of the macOS/Windows mode.
-- `FN`: `Z` requests raw voltage from both halves, `M` toggles macOS/Windows
-  mode, `Esc` unlocks Studio, the left side carries F1–F12, and the top-right
-  positions carry volume down/mute/up. The Backspace thumb sends forward Delete;
-  plain Backspace on BASE is unchanged.
+  Equal, the leftmost home-row key, toggles Mac/Windows mode for the active host.
+- `FN`: `Z` requests raw voltage from both halves and `Esc` unlocks Studio.
+  F1–F9 horizontally mirror SYM's number grid onto W/E/R, S/D/F, and X/C/V;
+  each row reads right-to-left as 1–3, 4–6, and 7–9. T/G/B carry F10/F11/F12.
+  Brightness down/up are on U/I; volume down/up on J/K align below NAV's Down/Up.
+  H is Mute. The Backspace thumb sends forward Delete; plain Backspace on BASE
+  is unchanged.
 - `DNG`: physical `Q`/`P` enter the bootloader on their own halves and physical
   `A`/`;` reset their own halves.
 
@@ -516,7 +521,7 @@ The detailed interaction guide is
 | `toucan_battery_estimator.c/.h` | Five ADC readings 10 ms apart, median, per-half mV offset, nonlinear 3.3–4.2 V LiPo curve, 1/4 IIR filter, maximum 2 percentage points per report, persisted state restored when within 200 mV | Local raw, calibrated/filtered voltage and percent exist; only percentage is currently in the UI |
 | `behavior_toucan_battery_readout.c` | Global `&battery` behavior asks each half for its own reading | Could be changed from typing text to opening a temporary diagnostics page |
 | `toucan_battery_readout.c/.h` | Queues left raw mV, relays right raw mV through a private input-split message, waits for a ready endpoint, then types `left=...mv` and `right=...mv` | Reuse the relay but cache structured state; do not type when the intended action is screen-only |
-| `toucan_platform_mode.c` | Persistent macOS/Windows mode; platform-aware command-key behavior keeps dedicated Ctrl unchanged; exposes getter/change event | Drives the Apple/Windows footer symbol and Command/Windows sequence-preview modifier art |
+| `toucan_platform_mode.c` | Persistent macOS/Windows choices per BLE slot and for USB; effective endpoint changes restore the relevant choice; dedicated Ctrl is unchanged | Drives the Apple/Windows footer symbol and Command/Windows sequence-preview modifier art |
 | `toucan_memory.c/.h` | Five persistent `empty|sequence|text` slots, private capture, playback, clear, and SYS-thumb capture gestures | Drives the ME row and MEM SET page; content is wiped from the capture buffer after save/cancel |
 | `toucan_bootloader.c/.h` | Side-local UF2 request shared by the DNG key and guarded serial touch | Gives the left display time to reveal the retained UF2 page; right reboots immediately |
 | `toucan_display_hooks.h` | Narrow pre-off and pre-UF2 hooks with millisecond delay return values | Keeps power/reboot modules independent of the optional screen implementation |
@@ -575,9 +580,9 @@ together.
 | --- | --- | --- |
 | PWR | `7..35` dirty, content starts `8` | Left/right filtered battery percentage, selected USB/BLE host, USB HID readiness, explicit right link state, and each half's USB-power presence |
 | LAYER | `48..69` | Highest active layer: `BASE SYM NAV CLP EDT APP MOU SYS FN DNG` |
-| BT | `82..101` | Five bonded/open profiles, active profile, and resolved/unresolved connection marker |
-| ME | `114..133` | Five persistent memory slot types; a prime mark means sequence, a plain digit means text, and a dot means empty |
-| SYS | `146..161` | Host Caps Lock and persistent platform mode, shown as an Apple or Windows symbol |
+| ME | `82..101` | Five persistent memory slot types; a prime mark means sequence, a plain digit means text, and a dot means empty |
+| BT | `114..133` | Five bonded/open profiles; active profile underline only while BLE is the actual output |
+| SYS | `146..161` | Host Caps Lock and the active USB/BLE host's saved platform mode, shown as an Apple or Windows symbol |
 
 The platform symbol occupies a right-aligned 16×16 cell at x=120, y=146:
 a native 16×16 Apple silhouette for macOS or four-pane Windows logo. Both are
@@ -608,8 +613,17 @@ The slot columns begin at x=38 with a 20-pixel pitch. USB appearance blinks the
 relevant half's bolt for six 250 ms frames; an unresolved active BLE profile
 blinks only its dotted underline every 500 ms; battery fill at or below 15%
 blinks every second. Ordinary connection, profile, caps, platform, battery, and
-memory changes redraw only their row bands. With no changing condition, the
-dashboard transfers zero bytes.
+memory changes redraw only their row bands. The ME row is above BT to match the
+keymap. USB output hides every BT selection underline (solid or dotted) without
+hiding bonded-slot numbers or empty-slot markers. With no changing condition,
+the dashboard transfers zero bytes.
+
+Platform mode is stored independently for USB and each BLE profile slot. Effective
+endpoint changes restore the relevant choice and update the footer only when the
+mode changes. Settings commit handles the restored BLE profile at boot; the old
+global choice supplies defaults without overriding newer per-host choices.
+Deferred saves snapshot the entire versioned mode table, so switching profiles
+while a save is queued cannot save a toggle under the wrong host.
 
 ### Retained pages and bounded motion
 

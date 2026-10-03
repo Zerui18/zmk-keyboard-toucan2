@@ -94,7 +94,8 @@ config TOUCAN_PLATFORM_MODE
       Command bindings send GUI in macOS mode and Control in Windows mode. The
       app-switch layer holds GUI in macOS mode or Alt in Windows mode until the
       layer key is released. Dedicated Control bindings remain unchanged. The
-      selected mode persists across resets.
+      mode is saved separately for USB and each BLE profile, follows the active
+      output automatically, and persists across resets.
 
 config TOUCAN_MEMORY
     bool "Toucan five-slot macro memory"

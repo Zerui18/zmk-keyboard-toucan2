@@ -108,6 +108,13 @@ shapes also remain native.
   separate from the compiled playback modifiers. Repeated names stay in their
   first position. Extra modifiers from one compound key binding have no input
   order and follow the names in GUI/Ctrl/Alt/Shift order, without duplicate icons.
+- Shift built into a symbol binding is represented by the symbol itself, not an
+  extra icon: SYM `+` shows `+`, and `cmd` followed by SYM `+` shows Cmd + `+`.
+  This applies to all shifted punctuation in the shared US-layout decoder.
+  Named or explicitly held Shift stays visible, even with a shifted symbol;
+  letter shortcuts and controls such as Shift+Tab also retain their Shift icon.
+  Only the capture's icon metadata changes: character decoding and saved
+  press/release modifiers retain the Shift needed for playback.
 - Stored SEQ data is a key-event stream, not converted text. Replay therefore
   still depends on the host's layout and lock state. Use TEXT for literal
   strings that must retain case across Caps Lock changes or contain reserved
@@ -134,12 +141,16 @@ Offline fingerprints independently derived from the original BDFs verify all
 bearings, descenders, blank-row removal, and rejection of invalid input.
 Compiler tests cover all 24 modifier orders, pending
 prefixes, target entry, repeated names, mixed named/physical modifiers, and
-`del` taps with independent releases under rollover.
+`del` taps with independent releases under rollover. All 21 shifted punctuation
+bindings are checked with left/right implicit Shift, unchanged playback, and
+no redundant icons; deliberate Shift and non-symbol shortcuts stay visible.
 The native ZMK integration test captures mixed-case content in both modes,
 checks that `ctrl` and `del` stay literal in TEXT, and exercises live SEQ names,
 plain and modified Delete taps, modifier-only playback, and overflow rejection.
 It checks the distinct icon orders and literal `4` labels for `shiftcmd4` and
-`cmdshift4`, while verifying identical Shift+GUI+4 playback. It uses the SYS
+`cmdshift4`, while verifying identical Shift+GUI+4 playback. It enters `+`
+through a held symbol layer, alone and after `cmd`/`shiftcmd`, checking both
+the visible modifier order and the original Shift+Equals playback. It uses the SYS
 save/cancel gestures and verifies playback and capture privacy. It checks
 runtime slots, not persistence across a power cycle:
 

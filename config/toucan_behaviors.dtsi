@@ -163,13 +163,13 @@
             bindings = <&cmd_key>, <&cmd_key>;
         };
 
-        /* Releasing before two seconds is inert; holding clears the selected BT profile. */
+        /* Tap prefers USB; a two-second hold clears the selected BT profile. */
         bt_clear_guard: btclrht {
             compatible = "zmk,behavior-hold-tap";
             #binding-cells = <2>;
             flavor = "tap-preferred";
             tapping-term-ms = <2000>;
-            bindings = <&bt_clear_selected>, <&none>;
+            bindings = <&bt_clear_selected>, <&out>;
         };
 
         /* NAV D: Shift+Enter once, GUI+Enter twice, matching Moonlander TD1. */
@@ -200,6 +200,19 @@
             wait-ms = <0>;
             tap-ms = <10>;
             bindings = <&kp LC(LS(SPACE))>;
+        };
+
+        /* Select the profile before preferring BLE, even with USB plugged in. */
+        bt_select: btsel {
+            compatible = "zmk,behavior-macro-one-param";
+            #binding-cells = <1>;
+            wait-ms = <0>;
+            tap-ms = <0>;
+            bindings
+                = <&macro_param_1to2>
+                , <&bt BT_SEL MACRO_PLACEHOLDER>
+                , <&out OUT_BLE>
+                ;
         };
 
         bt_clear_selected: btclear {

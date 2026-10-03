@@ -32,6 +32,19 @@ static const struct {
 };
 
 static const struct {
+    uint16_t keycode;
+    uint8_t modifiers;
+    uint8_t input_modifiers;
+    uint8_t order[TOUCAN_MEMORY_MODIFIER_COUNT];
+} preview_shortcuts[] = {
+    {HID_USAGE_KEY_KEYBOARD_4_AND_DOLLAR, MOD_LSFT | MOD_LGUI, 0, {MOD_LSFT, MOD_LGUI}},
+    {HID_USAGE_KEY_KEYBOARD_4_AND_DOLLAR, MOD_LSFT | MOD_LGUI, 0, {MOD_LGUI, MOD_LSFT}},
+    {HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, MOD_LSFT, MOD_LSFT, {0}},
+    {HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, MOD_LSFT | MOD_LGUI, MOD_LSFT, {MOD_LGUI}},
+    {HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, MOD_LSFT | MOD_LGUI, MOD_LSFT, {MOD_LSFT, MOD_LGUI}},
+};
+
+static const struct {
     const char *preview;
     const char *playback;
     size_t playback_events;
@@ -40,7 +53,7 @@ static const struct {
     {"aABcAa", "aABcAa", 20},
     {"psa", "Psa", 2 * ARRAY_SIZE(named_shortcuts)},
     {"", "", 2},
-    {"44", "$$", 4},
+    {"44+++", "$$+++", 2 * ARRAY_SIZE(preview_shortcuts)},
 };
 static unsigned int saved_count;
 static size_t replay_length;
@@ -167,13 +180,18 @@ static int capture_listener(const zmk_event_t *eh) {
         }
         if (snapshot.capture.slot == 4) {
             assert(saw_live_shift_cmd && saw_live_cmd_shift);
+            assert(snapshot.capture.sequence_action_count <= 2 * ARRAY_SIZE(preview_shortcuts));
             for (size_t i = 0; i < snapshot.capture.sequence_action_count; i++) {
-                const uint8_t *order = snapshot.capture.sequence_preview[i].modifier_order;
-                assert(order[0] == (i < 2 ? MOD_LSFT : MOD_LGUI));
-                assert(order[1] == (i < 2 ? MOD_LGUI : MOD_LSFT));
-                assert(order[2] == 0U && order[3] == 0U);
-                assert(snapshot.capture.sequence[i].keycode == HID_USAGE_KEY_KEYBOARD_4_AND_DOLLAR);
-                assert(snapshot.capture.sequence[i].implicit_modifiers == (MOD_LSFT | MOD_LGUI));
+                const struct toucan_memory_sequence_action *action = &snapshot.capture.sequence[i];
+                const struct toucan_memory_sequence_preview *item = &snapshot.capture.sequence_preview[i];
+                assert(action->usage_page == HID_USAGE_KEY);
+                assert(action->keycode == preview_shortcuts[i / 2].keycode);
+                assert(action->implicit_modifiers == preview_shortcuts[i / 2].modifiers);
+                assert(action->explicit_modifiers == 0U);
+                assert(action->pressed == ((i % 2U) == 0U));
+                assert(item->implicit_modifiers == preview_shortcuts[i / 2].input_modifiers);
+                assert(memcmp(item->modifier_order, preview_shortcuts[i / 2].order,
+                              TOUCAN_MEMORY_MODIFIER_COUNT) == 0);
             }
         }
         complete_capture[snapshot.capture.slot] = true;
@@ -198,7 +216,7 @@ static int playback_listener(const zmk_event_t *eh) {
             assert(snapshot.slot_types[3] == TOUCAN_MEMORY_SLOT_SEQUENCE);
             assert(snapshot.slot_types[4] == TOUCAN_MEMORY_SLOT_SEQUENCE);
             puts("PASS: private TEXT/SEQ capture, del shorthand, ordered modifier previews, "
-                 "shortcut playback, and overflow guards");
+                 "literal SYM symbols, shortcut playback, and overflow guards");
         }
         return ZMK_EV_EVENT_BUBBLE;
     }
@@ -216,9 +234,10 @@ static int playback_listener(const zmk_event_t *eh) {
         assert(event->keycode == HID_USAGE_KEY_KEYBOARD_LEFTCONTROL);
         assert(event->state == (replay_events == 0U));
     } else if (saved_count == 5U) {
-        assert(replay_events < 4U);
-        assert(event->keycode == HID_USAGE_KEY_KEYBOARD_4_AND_DOLLAR);
-        assert(event->implicit_modifiers == (MOD_LSFT | MOD_LGUI));
+        assert(replay_events < 2 * ARRAY_SIZE(preview_shortcuts));
+        assert(event->usage_page == HID_USAGE_KEY);
+        assert(event->keycode == preview_shortcuts[replay_events / 2].keycode);
+        assert(event->implicit_modifiers == preview_shortcuts[replay_events / 2].modifiers);
         assert(event->explicit_modifiers == 0U);
         assert(event->state == ((replay_events % 2U) == 0U));
     }

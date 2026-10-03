@@ -147,6 +147,10 @@ run_native_test() {
     local config_dir="${REPO_DIR}/tests/$2"
     local pass_marker="$3"
     local build_dir="${BUILD_ROOT}/tests/${name}"
+    shift 3
+    if [[ "$#" -eq 0 ]]; then
+        set -- default
+    fi
 
     west build -s "${WORKSPACE_DIR}/zmk/app" \
         -d "$build_dir" -b native_posix_64 -- \
@@ -154,14 +158,22 @@ run_native_test() {
         "-DZMK_CONFIG=${config_dir}" \
         "-DZMK_EXTRA_MODULES=${REPO_DIR};${config_dir}" \
         -DCONFIG_ASSERT=y
-    if ! timeout 30 "${build_dir}/zephyr/zmk.exe" >"${build_dir}/replay.log" 2>&1; then
-        cat "${build_dir}/replay.log"
-        exit 1
-    fi
-    if ! grep -F "$pass_marker" "${build_dir}/replay.log"; then
-        cat "${build_dir}/replay.log"
-        exit 1
-    fi
+    local test_case log_file
+    for test_case in "$@"; do
+        log_file="${build_dir}/replay.log"
+        if [[ "$test_case" != default ]]; then
+            log_file="${build_dir}/replay-${test_case}.log"
+        fi
+        if ! TOUCAN_TEST_CASE="$test_case" timeout 30 "${build_dir}/zephyr/zmk.exe" \
+            >"$log_file" 2>&1; then
+            cat "$log_file"
+            exit 1
+        fi
+        if ! grep -F "$pass_marker" "$log_file"; then
+            cat "$log_file"
+            exit 1
+        fi
+    done
 }
 
 clean_outputs() {
@@ -210,6 +222,8 @@ main() {
         test-platform)
             ensure_workspace false
             run_native_test platform-mode platform_mode 'PASS: platform shortcuts'
+            run_native_test platform-profiles platform_profiles 'PASS: per-host platform modes' \
+                legacy new-first legacy-first shorter
             ;;
         clean)
             clean_outputs

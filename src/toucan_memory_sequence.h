@@ -30,7 +30,8 @@ struct toucan_memory_sequence_preview {
     uint8_t implicit_modifiers;
     /* Unique icon masks in entry order, using left-side bits; unused entries are zero.
      * Modifiers from a single compound binding have no entry order and follow names
-     * in the existing GUI/Ctrl/Alt/Shift order. */
+     * in GUI/Ctrl/Alt/Shift order. Implicit Shift already expressed by a symbol's
+     * label is omitted; named and explicit Shift remain visible. */
     uint8_t modifier_order[TOUCAN_MEMORY_MODIFIER_COUNT];
 };
 

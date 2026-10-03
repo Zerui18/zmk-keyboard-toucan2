@@ -17,4 +17,5 @@ struct toucan_platform_mode_changed {
 
 ZMK_EVENT_DECLARE(toucan_platform_mode_changed);
 
+/* Effective output's saved choice: one USB setting and one per BLE profile slot. */
 bool toucan_platform_is_windows(void);

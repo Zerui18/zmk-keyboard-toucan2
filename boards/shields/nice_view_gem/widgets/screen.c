@@ -56,8 +56,8 @@ BUILD_ASSERT(ZMK_BLE_PROFILE_COUNT >= TOUCAN_BT_PROFILE_COUNT,
 enum dashboard_band {
     DASHBOARD_BAND_POWER = BIT(0),
     DASHBOARD_BAND_LAYER = BIT(1),
-    DASHBOARD_BAND_BT = BIT(2),
-    DASHBOARD_BAND_MEMORY = BIT(3),
+    DASHBOARD_BAND_MEMORY = BIT(2),
+    DASHBOARD_BAND_BT = BIT(3),
     DASHBOARD_BAND_SYSTEM = BIT(4),
 };
 
@@ -68,10 +68,10 @@ enum dashboard_band {
 #define POWER_CONTENT_Y 8
 #define LAYER_Y 48
 #define LAYER_HEIGHT 22
-#define BT_Y 82
-#define BT_HEIGHT 20
-#define MEMORY_Y 114
+#define MEMORY_Y 82
 #define MEMORY_HEIGHT 20
+#define BT_Y 114
+#define BT_HEIGHT 20
 #define SYSTEM_Y 146
 #define SYSTEM_HEIGHT 16
 
@@ -324,24 +324,24 @@ static void draw_dotted_underline(struct zmk_widget_screen *widget, int x, int y
 
 static void draw_bt_band(struct zmk_widget_screen *widget) {
     clear_rows(widget, BT_Y, BT_HEIGHT);
-    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 84, "BT");
+    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, BT_Y + 2, "BT");
 
     for (int i = 0; i < TOUCAN_BT_PROFILE_COUNT; i++) {
         int slot_x = 38 + i * 20;
 
         if (widget->state.profiles_bonded[i]) {
             char digit[] = {(char)('1' + i), '\0'};
-            DRAW_STATUS_TEXT(widget, slot_x + 4, 84, digit);
+            DRAW_STATUS_TEXT(widget, slot_x + 4, BT_Y + 2, digit);
         } else {
-            fill_rect(widget, slot_x + 8, 89, 2, 2, true);
+            fill_rect(widget, slot_x + 8, BT_Y + 7, 2, 2, true);
         }
 
-        if (i == widget->state.active_profile_index) {
+        if (!widget->state.selected_usb && i == widget->state.active_profile_index) {
             if (widget->state.active_profile_connected &&
                 widget->state.profiles_bonded[i]) {
-                fill_rect(widget, slot_x + 2, 98, 14, 3, true);
+                fill_rect(widget, slot_x + 2, BT_Y + 16, 14, 3, true);
             } else if (widget->animation.pairing_marker_visible) {
-                draw_dotted_underline(widget, slot_x + 2, 98, 14);
+                draw_dotted_underline(widget, slot_x + 2, BT_Y + 16, 14);
             }
         }
     }
@@ -349,7 +349,7 @@ static void draw_bt_band(struct zmk_widget_screen *widget) {
 
 static void draw_memory_band(struct zmk_widget_screen *widget) {
     clear_rows(widget, MEMORY_Y, MEMORY_HEIGHT);
-    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, 116, "ME");
+    DRAW_STATUS_TEXT(widget, CANVAS_PADDING, MEMORY_Y + 2, "ME");
 
     for (int i = 0; i < TOUCAN_MEMORY_SLOT_COUNT; i++) {
         int slot_x = 38 + i * 20;
@@ -368,17 +368,18 @@ static void draw_memory_band(struct zmk_widget_screen *widget) {
                 const struct bitmap_glyph *glyph =
                     find_glyph(status_font.glyphs, status_font.glyph_count, digit[0]);
                 if (glyph != NULL) {
-                    draw_bitmap(widget, slot_x + 4, 116 + status_font.y_offset, glyph, false);
+                    draw_bitmap(widget, slot_x + 4, MEMORY_Y + 2 + status_font.y_offset,
+                                glyph, false);
                 }
             } else {
-                DRAW_STATUS_TEXT(widget, slot_x + 4, 116, digit);
+                DRAW_STATUS_TEXT(widget, slot_x + 4, MEMORY_Y + 2, digit);
             }
 
             if (type == TOUCAN_MEMORY_SLOT_SEQUENCE && !inverted) {
-                fill_rect(widget, slot_x + 15, 115, 2, 4, true);
+                fill_rect(widget, slot_x + 15, MEMORY_Y + 1, 2, 4, true);
             }
         } else if (!inverted) {
-            fill_rect(widget, slot_x + 8, 121, 2, 2, true);
+            fill_rect(widget, slot_x + 8, MEMORY_Y + 7, 2, 2, true);
         }
     }
 }
@@ -432,13 +433,13 @@ static void render_bands(struct zmk_widget_screen *widget, uint8_t bands) {
         draw_layer_band(widget);
         invalidate_rows(widget, LAYER_Y, LAYER_HEIGHT);
     }
-    if ((bands & DASHBOARD_BAND_BT) != 0U) {
-        draw_bt_band(widget);
-        invalidate_rows(widget, BT_Y, BT_HEIGHT);
-    }
     if ((bands & DASHBOARD_BAND_MEMORY) != 0U) {
         draw_memory_band(widget);
         invalidate_rows(widget, MEMORY_Y, MEMORY_HEIGHT);
+    }
+    if ((bands & DASHBOARD_BAND_BT) != 0U) {
+        draw_bt_band(widget);
+        invalidate_rows(widget, BT_Y, BT_HEIGHT);
     }
     if ((bands & DASHBOARD_BAND_SYSTEM) != 0U) {
         draw_system_band(widget);
@@ -749,8 +750,8 @@ static void draw_scene(struct zmk_widget_screen *widget, enum toucan_display_pag
     case TOUCAN_DISPLAY_PAGE_DASHBOARD:
         draw_power_band(widget);
         draw_layer_band(widget);
-        draw_bt_band(widget);
         draw_memory_band(widget);
+        draw_bt_band(widget);
         draw_system_band(widget);
         break;
     case TOUCAN_DISPLAY_PAGE_SLEEP:

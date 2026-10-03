@@ -310,6 +310,136 @@ static void test_modifier_order(void) {
     icon_order(3, (uint8_t[]){MOD_LALT, MOD_LCTL, 0, 0});
 }
 
+static void test_literal_symbol_preview(void) {
+    const uint16_t codes[] = {
+        HID_USAGE_KEY_KEYBOARD_1_AND_EXCLAMATION, HID_USAGE_KEY_KEYBOARD_2_AND_AT,
+        HID_USAGE_KEY_KEYBOARD_3_AND_HASH, HID_USAGE_KEY_KEYBOARD_4_AND_DOLLAR,
+        HID_USAGE_KEY_KEYBOARD_5_AND_PERCENT, HID_USAGE_KEY_KEYBOARD_6_AND_CARET,
+        HID_USAGE_KEY_KEYBOARD_7_AND_AMPERSAND, HID_USAGE_KEY_KEYBOARD_8_AND_ASTERISK,
+        HID_USAGE_KEY_KEYBOARD_9_AND_LEFT_PARENTHESIS, HID_USAGE_KEY_KEYBOARD_0_AND_RIGHT_PARENTHESIS,
+        HID_USAGE_KEY_KEYBOARD_MINUS_AND_UNDERSCORE, HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS,
+        HID_USAGE_KEY_KEYBOARD_LEFT_BRACKET_AND_LEFT_BRACE,
+        HID_USAGE_KEY_KEYBOARD_RIGHT_BRACKET_AND_RIGHT_BRACE,
+        HID_USAGE_KEY_KEYBOARD_BACKSLASH_AND_PIPE, HID_USAGE_KEY_KEYBOARD_SEMICOLON_AND_COLON,
+        HID_USAGE_KEY_KEYBOARD_APOSTROPHE_AND_QUOTE, HID_USAGE_KEY_KEYBOARD_GRAVE_ACCENT_AND_TILDE,
+        HID_USAGE_KEY_KEYBOARD_COMMA_AND_LESS_THAN, HID_USAGE_KEY_KEYBOARD_PERIOD_AND_GREATER_THAN,
+        HID_USAGE_KEY_KEYBOARD_SLASH_AND_QUESTION_MARK,
+    };
+    const char *symbols = "!@#$%^&*()_+{}|:\"~<>?";
+    const uint8_t shifts[] = {MOD_LSFT, MOD_RSFT, MOD_LSFT | MOD_RSFT};
+    const uint8_t no_icons[TOUCAN_MEMORY_MODIFIER_COUNT] = {0};
+    assert(sizeof(codes) / sizeof(codes[0]) == strlen(symbols));
+    for (size_t s = 0; s < sizeof(shifts) / sizeof(shifts[0]); s++) {
+        reset();
+        for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
+            event(codes[i], true, shifts[s], 0);
+            event(codes[i], false, shifts[s], 0);
+        }
+        unchanged(); /* Only icon metadata changes, never the captured key events. */
+        for (size_t i = 0; i < result.count; i++) {
+            icon_order(i, no_icons);
+        }
+        decoded_characters(true, false, symbols);
+        decoded_characters(true, true, symbols);
+        decoded_characters(false, false, symbols);
+    }
+
+    /* Named modifiers stay visible, even when Shift overlaps the symbol's Shift. */
+    const struct {
+        const char *names;
+        uint8_t modifiers;
+        uint8_t order[TOUCAN_MEMORY_MODIFIER_COUNT];
+    } cases[] = {
+        {"", 0, {0}},
+        {"cmd", MOD_LGUI, {MOD_LGUI}},
+        {"shiftcmd", MOD_LSFT | MOD_LGUI, {MOD_LSFT, MOD_LGUI}},
+        {"cmdshift", MOD_LGUI | MOD_LSFT, {MOD_LGUI, MOD_LSFT}},
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        reset();
+        text(cases[i].names);
+        event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, true, MOD_LSFT, 0);
+        compile(); /* Correct immediately on key-down, not only after release/save. */
+        assert(!result.overflow && result.count == 1);
+        icon_order(0, cases[i].order);
+        action(0, HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, true, MOD_LSFT | cases[i].modifiers, 0);
+        event(key('a'), true, 0, 0);
+        event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, false, MOD_LSFT, 0);
+        event(key('a'), false, 0, 0);
+        compile();
+        assert(!result.overflow && result.count == 4);
+        action(2, HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, false, MOD_LSFT | cases[i].modifiers, 0);
+        action(1, key('a'), true, 0, 0);
+        action(3, key('a'), false, 0, 0);
+        icon_order(0, cases[i].order);
+        icon_order(2, cases[i].order); /* Rollover release must not re-add hidden Shift. */
+        icon_order(1, no_icons);
+        icon_order(3, no_icons);
+        assert(output.preview[0].implicit_modifiers == MOD_LSFT);
+        assert(output.preview[2].implicit_modifiers == MOD_LSFT);
+        decoded_characters(true, false, "+a");
+        decoded_characters(false, false, "+a");
+    }
+
+    reset();
+    uint8_t modifiers = MOD_RSFT | MOD_RGUI | MOD_RCTL | MOD_RALT;
+    event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, true, modifiers, 0);
+    event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, false, modifiers, 0);
+    unchanged();
+    icon_order(0, (uint8_t[]){MOD_LGUI, MOD_LCTL, MOD_LALT, 0});
+    icon_order(1, (uint8_t[]){MOD_LGUI, MOD_LCTL, MOD_LALT, 0});
+}
+
+static void test_deliberate_shift_preview(void) {
+    /* Shift remains meaningful on letter shortcuts, controls and unknown usages. */
+    const uint16_t codes[] = {
+        HID_USAGE_KEY_KEYBOARD_Z, HID_USAGE_KEY_KEYBOARD_TAB,
+        HID_USAGE_KEY_KEYBOARD_RETURN_ENTER, HID_USAGE_KEY_KEYBOARD_SPACEBAR,
+        HID_USAGE_KEY_KEYBOARD_LEFTARROW,
+    };
+    const uint8_t shift_icon[TOUCAN_MEMORY_MODIFIER_COUNT] = {MOD_LSFT};
+    const uint8_t no_icons[TOUCAN_MEMORY_MODIFIER_COUNT] = {0};
+    for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
+        reset();
+        event(codes[i], true, MOD_LSFT, 0);
+        event(codes[i], false, MOD_LSFT, 0);
+        unchanged();
+        icon_order(0, shift_icon);
+        icon_order(1, shift_icon);
+    }
+    reset();
+    event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, true, MOD_LSFT, 0);
+    event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, false, MOD_LSFT, 0);
+    input[0].usage_page = input[1].usage_page = HID_USAGE_CONSUMER;
+    unchanged(); /* A matching numeric usage on another page is not a symbol. */
+    icon_order(0, shift_icon);
+    icon_order(1, shift_icon);
+
+    reset();
+    event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, true, MOD_LSFT, MOD_RSFT);
+    event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, false, MOD_LSFT, MOD_RSFT);
+    unchanged(); /* Explicit Shift is never hidden by an overlapping implicit Shift. */
+    icon_order(0, shift_icon);
+    icon_order(1, shift_icon);
+
+    const uint16_t physical_shifts[] = {
+        HID_USAGE_KEY_KEYBOARD_LEFTSHIFT, HID_USAGE_KEY_KEYBOARD_RIGHTSHIFT,
+    };
+    for (size_t i = 0; i < sizeof(physical_shifts) / sizeof(physical_shifts[0]); i++) {
+        reset();
+        event(physical_shifts[i], true, 0, 0);
+        event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, true, MOD_LSFT, 0);
+        event(HID_USAGE_KEY_KEYBOARD_EQUAL_AND_PLUS, false, MOD_LSFT, 0);
+        event(physical_shifts[i], false, 0, 0);
+        unchanged(); /* Physical Shift remains a separate action/icon in the renderer. */
+        action(0, physical_shifts[i], true, 0, 0);
+        action(3, physical_shifts[i], false, 0, 0);
+        icon_order(1, no_icons);
+        icon_order(2, no_icons);
+        decoded_characters(true, false, "+");
+    }
+}
+
 static void test_live_prefixes(void) {
     reset();
     text("c");
@@ -663,8 +793,10 @@ int main(void) {
     test_rollovers();
     test_named_modifier_preview();
     test_modifier_order();
+    test_literal_symbol_preview();
+    test_deliberate_shift_preview();
     test_del_shorthand();
     test_bounds();
-    puts("PASS: del shorthand, modifier order, literal labels, playback, rollover, and bounds");
+    puts("PASS: del shorthand, modifier order, literal symbols, playback, rollover, and bounds");
     return 0;
 }

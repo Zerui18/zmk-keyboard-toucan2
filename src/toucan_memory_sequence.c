@@ -159,6 +159,23 @@ static void apply_named_modifiers(struct toucan_memory_sequence_action *action,
     }
 }
 
+static uint8_t binding_preview_modifiers(const struct toucan_memory_sequence_action *action) {
+    uint8_t modifiers = action->implicit_modifiers;
+    uint8_t unshifted_modifiers = modifiers & ~(MOD_LSFT | MOD_RSFT);
+    char plain, shifted;
+
+    /* A symbol such as PLUS already shows its binding's implicit Shift in the label.
+     * Keep Shift on letters/controls, and never hide explicitly supplied modifiers. */
+    if (modifiers != unshifted_modifiers && action->usage_page == HID_USAGE_KEY &&
+        toucan_keycode_to_character(action->keycode, unshifted_modifiers, false, &plain) &&
+        (plain < 'a' || plain > 'z') &&
+        toucan_keycode_to_character(action->keycode, modifiers, false, &shifted) &&
+        shifted != plain) {
+        modifiers = unshifted_modifiers;
+    }
+    return modifiers | action->explicit_modifiers;
+}
+
 static void emit_input(struct sequence_compiler *compiler, size_t source,
                        const uint8_t named_modifiers[TOUCAN_MEMORY_MODIFIER_COUNT]) {
     struct toucan_memory_sequence_action action = compiler->input[source];
@@ -186,7 +203,7 @@ static void emit_input(struct sequence_compiler *compiler, size_t source,
     /* Preserve named order, then append any extra modifiers from the key binding.
      * Left and right variants share one icon, even when a name and binding overlap. */
     static const uint8_t binding_order[] = {MOD_LGUI, MOD_LCTL, MOD_LALT, MOD_LSFT};
-    uint8_t modifiers = action.implicit_modifiers | action.explicit_modifiers;
+    uint8_t modifiers = binding_preview_modifiers(&compiler->input[source]);
     modifiers |= modifiers >> 4;
     for (size_t i = 0; i < sizeof(binding_order); i++) {
         if ((modifiers & binding_order[i]) != 0U) {

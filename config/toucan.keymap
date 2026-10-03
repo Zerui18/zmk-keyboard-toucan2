@@ -94,20 +94,20 @@
         system {
             display-name = "SYS";
             bindings = <
-                &memory_mode        &memory_slot 0 0      &memory_slot 1 1      &memory_slot 2 2 &memory_slot 3 3 &memory_slot 4 4    &trans &trans &trans &trans &trans &trans
-                &trans              &kp LC(LS(LA(LG(A)))) &kp LC(LS(LA(LG(V)))) &trans           &trans           &trans              &trans &trans &trans &trans &trans &trans
-                &bt_clear_guard 0 0 &bt BT_SEL 0          &bt BT_SEL 1          &bt BT_SEL 2     &bt BT_SEL 3     &bt BT_SEL 4        &trans &trans &trans &trans &trans &trans
-                                                                                &trans           &trans           &trans              &trans &trans &trans
+                &memory_mode              &memory_slot 0 0      &memory_slot 1 1      &memory_slot 2 2 &memory_slot 3 3 &memory_slot 4 4    &trans &trans &trans &trans &trans &trans
+                &platform_mode            &kp LC(LS(LA(LG(A)))) &kp LC(LS(LA(LG(V)))) &trans           &trans           &trans              &trans &trans &trans &trans &trans &trans
+                &bt_clear_guard 0 OUT_USB &bt_select 0          &bt_select 1          &bt_select 2     &bt_select 3     &bt_select 4        &trans &trans &trans &trans &trans &trans
+                                                                                      &trans           &trans           &trans              &trans &trans &trans
             >;
         };
 
         fn {
             display-name = "FN";
             bindings = <
-                &studio_unlock &trans   &kp F7 &kp F8 &kp F9  &kp F12    &kp C_VOL_DN &kp C_MUTE     &kp C_VOL_UP &trans &trans &trans
-                &trans         &trans   &kp F4 &kp F5 &kp F6  &kp F11    &trans       &trans         &trans       &trans &trans &trans
-                &trans         &battery &kp F1 &kp F2 &kp F3  &kp F10    &trans       &platform_mode &trans       &trans &trans &trans
-                                               &trans &kp DEL &trans     &trans       &trans         &trans
+                &studio_unlock &trans   &kp F3 &kp F2 &kp F1  &kp F10    &trans     &kp C_BRI_DN &kp C_BRI_UP &trans &trans &trans
+                &trans         &trans   &kp F6 &kp F5 &kp F4  &kp F11    &kp C_MUTE &kp C_VOL_DN &kp C_VOL_UP &trans &trans &trans
+                &trans         &battery &kp F9 &kp F8 &kp F7  &kp F12    &trans     &trans       &trans       &trans &trans &trans
+                                               &trans &kp DEL &trans     &trans     &trans       &trans
             >;
         };
 
